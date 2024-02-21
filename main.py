@@ -208,8 +208,8 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--num_train_seq', type=int, default=40000)
     parser.add_argument('--num_epochs', type=int, default=1000) # -1 for infinite epochs
-    parser.add_argument('--data_root', default='waymo_open')
-    parser.add_argument('--dataset', default='waymo', choices=['waymo'])
+    parser.add_argument('--data_root', default='data_raw')
+    parser.add_argument('--dataset', default='waymo', choices=['waymo', 'movi'])
     parser.add_argument('--lr', type=float, default=1e-4)
 
     # Network hyperparameters
@@ -221,8 +221,8 @@ if __name__ == '__main__':
     parser.add_argument('--bc_loss_weight')
     parser.add_argument('--sigma', type=float, default=0.08)
     parser.add_argument('--downsample_factor', type=int, default=16)
-    parser.add_argument('--num_patches_height', type=int, default=None)
-    parser.add_argument('--num_patches_width', type=int, default=None)
+    parser.add_argument('--num_patches_height', type=int, default=None) #should be 16
+    parser.add_argument('--num_patches_width', type=int, default=None)  #should be 16
     parser.add_argument('--checkpoint_path', default=None)
     parser.add_argument('--decoder_layers', type=int, default=3)
     parser.add_argument('--decoder_size', type=int, default=1536)
@@ -250,6 +250,13 @@ if __name__ == '__main__':
             viewpoint_size = 12 + 3
         default_patches_hw = (6, 14)
         default_num_object_slots = 21
+
+    if args.dataset == 'movi':
+        #fill this in
+        #set num patches width and height
+        default_patches_hw = (16, 16) #size of image dimension / 16
+        viewpoint_size = 4
+        default_num_object_slots = 64 #default_patches_hw/2 multiplied #can try downsampling to 128x128 images or 64x64 using pillow
     
     viewpoint_size *= (1 + 2*args.num_fourier_bands)
     nph = args.num_patches_height if args.num_patches_height is not None else default_patches_hw[0]
