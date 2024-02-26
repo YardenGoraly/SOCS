@@ -149,10 +149,10 @@ class LocalDataset(SOCSDataset):
                                viewpoint_seq=viewpoint_seq,
                                time_seq=time_seq)
             
-            if 'bc_waypoints' in data:
-                loaded_data['bc_waypoints'] = data['bc_waypoints']
-            if 'bc_mask' in data:
-                loaded_data['bc_mask'] = data['bc_mask']
+            # if 'bc_waypoints' in data:
+            #     loaded_data['bc_waypoints'] = data['bc_waypoints']
+            # if 'bc_mask' in data:
+            #     loaded_data['bc_mask'] = data['bc_mask']
 
         return loaded_data
 
@@ -254,6 +254,7 @@ if __name__ == '__main__':
     if args.dataset == 'movi':
         #fill this in
         #set num patches width and height
+        img_dim_hw = (256, 256)
         default_patches_hw = (16, 16) #size of image dimension / 16
         viewpoint_size = 4
         default_num_object_slots = 64 #default_patches_hw/2 multiplied #can try downsampling to 128x128 images or 64x64 using pillow
