@@ -18,7 +18,7 @@ def save_train_seq(seq, seq_num, out_dir):
     print('saving')
     print('out_dir', out_dir)
     with open(os.path.join(out_dir, f'{seq_num}.npz'), 'wb') as f:
-        np.savez_compressed(f, rgb=seq,
+        np.savez_compressed(f, rgb=seq[:, None],
                             viewpoint_transform=viewpoint_transform,
                             time=timestamps,
                             bc_waypoints=None,
@@ -44,7 +44,7 @@ def make_train_seqs(first_seq_num, unique_start_ids, in_dir, out_dir):
         imgs_arr += [arr]
         if counter % 8 == 0:
             imgs_arr = np.array(imgs_arr)
-            save_train_seq(imgs_arr, counter//8, out_dir)
+            save_train_seq(imgs_arr, (counter - 1)//8, out_dir)
             imgs_arr = []
     # print('imgs_arr:', imgs_arr.shape)
     

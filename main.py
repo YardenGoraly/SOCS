@@ -114,7 +114,6 @@ class SOCSDataset(Dataset):
                     base_patch_embeddings[i,j,k] = np.array([time_offset, patch_y_offset, patch_x_offset, *view_offset])
 
         patch_positional_embeddings = fourier_embeddings(base_patch_embeddings, self.num_fourier_bands, self.fourier_sampling_rate)
-
         data = dict(
             img_seq = img_seq.astype('float32'),
             decode_dims = np.array([num_frames, 
