@@ -210,7 +210,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_root', default='data_raw')
     parser.add_argument('--dataset', default='waymo', choices=['waymo', 'movi'])
     parser.add_argument('--lr', type=float, default=1e-4)
-
+    
     # Network hyperparameters
     parser.add_argument('--no_viewpoint', action='store_true')
     parser.add_argument('--num_gaussian_heads', type=int, default=3)

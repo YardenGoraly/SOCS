@@ -54,7 +54,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('split', choices=['train', 'val'])
     parser.add_argument('--in_dir', default='data_raw')
-    parser.add_argument('--out_dir', default='output')
+    parser.add_argument('--out_dir', default='data_gen')
     parser.add_argument('--load_seq_ids', default=None,
         help='To resume generating training sequences, load previously generated IDs from file')
     parser.add_argument('--save_seq_ids', default=None,
