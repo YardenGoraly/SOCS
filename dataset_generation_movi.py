@@ -11,7 +11,7 @@ from dataset_generation_const import *
 def save_train_seq(seq, seq_num, out_dir):
     num_cam = 1
     seq_len = 8
-    viewpoint_transform = np.zeros((seq_len, 1, 4, 4))
+    viewpoint_transform = np.zeros((seq_len, 1, 4))
     timestamps = np.linspace(0, 1, seq_len)
     # seq = seq.astype('float') / 255  may or may not be necessary
 
@@ -27,27 +27,22 @@ def save_train_seq(seq, seq_num, out_dir):
     return
 
 def make_train_seqs(first_seq_num, unique_start_ids, in_dir, out_dir):
-    # seq_num = first_seq_num
-    # train_files = os.path.join(in_dir, '*.tfrecord')
-    # filenames = tf.io.matching_files(train_files)
-    # dataset = tf.data.TFRecordDataset(filenames)
-    # current_seq = []
-
-    # train_files = os.path.join(in_dir, '*.png')
-    train_files = os.listdir(in_dir)
+    train_videos = os.listdir(in_dir)
     imgs_arr = []
+    #videos should have 8 frames
     counter = 0
-    for file in train_files:
+    # print('here', train_videos)
+    for video in train_videos:
+        print('generating video', counter)
         counter += 1
-        img = Image.open(os.path.join(in_dir,file))
-        arr = np.asarray(img, dtype='uint8')[..., :-1]
-        imgs_arr += [arr]
-        if counter % 8 == 0:
-            imgs_arr = np.array(imgs_arr)
-            save_train_seq(imgs_arr, (counter - 1)//8, out_dir)
-            imgs_arr = []
-    # print('imgs_arr:', imgs_arr.shape)
-    
+        video_path = os.path.join(in_dir, video)
+        for image in os.listdir(video_path):
+            img = Image.open(os.path.join(in_dir, video, image))
+            arr = np.asarray(img, dtype='uint8')[..., :-1]
+            imgs_arr += [arr]
+        imgs_arr = np.array(imgs_arr)
+        save_train_seq(imgs_arr, (counter - 1), out_dir)
+        imgs_arr = []
 
 
 if __name__ == '__main__':

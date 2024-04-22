@@ -169,7 +169,7 @@ if __name__ == '__main__':
         do_val = True
     else:
         do_val = False
-
+    
     if args.data_root is None:
         data_root = ckpt.hparams['dataset_root']
     else:
@@ -228,6 +228,7 @@ if __name__ == '__main__':
         print(f'Results on {split} dataset:')
         for (key, val) in results.items():
             print(f'Mean {key}: {np.nanmean(val)}, std: {np.nanstd(val)}')
+        print('here', log_dir)
         if args.num_seq_to_plot > 0:
             for (index, frames) in zip(indices, all_plots):
                 if args.video_format == 'both' or args.video_format == 'gif':

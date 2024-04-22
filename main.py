@@ -67,7 +67,7 @@ class SOCSDataset(Dataset):
         decode_mask = np.zeros((num_frames,) + self.img_dim_hw, dtype='bool')
         decode_mask[:, decode_pixel_h_inds, decode_pixel_w_inds] = True
 
-        all_inds = np.array(np.meshgrid(range(num_frames), range(self.img_dim_hw[0]), range(self.img_dim_hw[1]), indexing='ij'))
+        all_inds = np.array(np.meshgrid(range(num_frames), range(self.img_dim_hw[0]), range(self.img_dim_hw[1]), indexing='ij')) #SAM put this in model.py for choosing the pixel to decode
         decode_inds = all_inds[:, decode_mask].T # /in num_p x 3
 
         img_seq = item['img_seq']
@@ -250,14 +250,23 @@ if __name__ == '__main__':
         default_patches_hw = (6, 14)
         default_num_object_slots = 21
 
+
     if args.dataset == 'movi':
-        #fill this in
         #set num patches width and height
         img_dim_hw = (256, 256)
         default_patches_hw = (16, 16) #size of image dimension / 16
         viewpoint_size = 4
-        default_num_object_slots = 64 #default_patches_hw/2 multiplied #can try downsampling to 128x128 images or 64x64 using pillow
-    
+        default_num_object_slots = 64
+
+    # if args.dataset == 'movi':
+    # #fill this in
+    # #set num patches width and height
+    # img_dim_hw = (64, 64)
+    # default_patches_hw = (4, 4) #size of image dimension / 16
+    # viewpoint_size = 4
+    # default_num_object_slots = 16 #default_patches_hw/2 multiplied #can try downsampling to 128x128 images or 64x64 using pillow
+
+
     viewpoint_size *= (1 + 2*args.num_fourier_bands)
     nph = args.num_patches_height if args.num_patches_height is not None else default_patches_hw[0]
     npw = args.num_patches_width if args.num_patches_width is not None else default_patches_hw[1]

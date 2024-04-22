@@ -90,9 +90,15 @@ class TransformerBlock(nn.Module):
         if self.norm_first:
             x = x + self._sa_block(self.norm1(x))
             x = x + self._ff_block(self.norm2(x))
+            if sum(torch.isnan(x).flatten().cpu().detach().numpy()):
+                print('got nan error here0')
+                import pdb; pdb.set_trace()
         else:
             x = self.norm1(x + self._sa_block(x))
             x = self.norm2(x + self._ff_block(x))
+            if sum(torch.isnan(x).flatten().cpu().detach().numpy()):
+                print('got nan error here1')
+                import pdb; pdb.set_trace()
         return x
 
     # self-attention block
