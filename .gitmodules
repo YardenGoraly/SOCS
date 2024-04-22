@@ -1,0 +1,3 @@
+[submodule "Segment-and-Track-Anything"]
+	path = Segment-and-Track-Anything
+	url = https://github.com/z-x-yang/Segment-and-Track-Anything.git
