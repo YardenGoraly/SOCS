@@ -55,7 +55,7 @@ class SOCS(LightningModule):
         self.encoder = CNNEncoder(img_dim_hw=img_dim_hw, output_dim=self.transformer_dim-self.hparams.viewpoint_size)
 
         transformer_1_layers = [
-            TransformerBlock(self.transformer_dim, num_transformer_heads, dim_feedforward=transformer_hidden_dim, dropout=0, activation='gelu')
+            TransformerBlock(self.transformer_dim, num_transformer_heads, dim_feedforward=transformer_hidden_dim, dropout=0, activation='relu')
             for _ in range(num_transformer_layers)]
         self.transformer_1 = nn.Sequential(*transformer_1_layers)
 
@@ -135,9 +135,9 @@ class SOCS(LightningModule):
         x = x.moveaxis(-1, 1) # \in T x K x B x E
         x = x.flatten(0, 1) # \in T*K x B x E
         x = self.transformer_2(x)
-        if sum(torch.isnan(x).flatten().cpu().detach().numpy()):
-            print('got nan error here3')
-            import pdb; pdb.set_trace()
+        # if sum(torch.isnan(x).flatten().cpu().detach().numpy()):
+        #     print('got nan error here3')
+        #     import pdb; pdb.set_trace()
         x = x.moveaxis(1, 0) # \in B x T*K x E
         x = x.reshape((batch_size, num_frame_slots, self.hparams.num_object_slots, self.transformer_dim)) # Uncollapse the patches
 
@@ -148,6 +148,7 @@ class SOCS(LightningModule):
     def decode_latents(self, data, slot_tokens, eval=False):
         output = {}
         decoder_queries = data['decoder_queries'] # \in B x N x S
+        # TS: could have a line here for decoder_queries_obj = data['decoder_queries_objects']
         object_latent_pars = self.latent_decoder(slot_tokens)
         object_latent_mean = object_latent_pars[..., :self.hparams.embed_dim] # \in B x K x E
 
@@ -157,23 +158,27 @@ class SOCS(LightningModule):
             object_latent_var = nn.functional.softplus(object_latent_pars[..., self.hparams.embed_dim:])
             # Sample object latents from gaussian distribution
             # print('here', sum(torch.isnan(object_latent_var).flatten().cpu().detach().numpy()))
-            if sum(torch.isnan(object_latent_var).flatten().cpu().detach().numpy()) or sum(torch.isnan(object_latent_mean).flatten().cpu().detach().numpy()):
-                print('got nan error')
-                import pdb; pdb.set_trace()
+            # if sum(torch.isnan(object_latent_var).flatten().cpu().detach().numpy()) or sum(torch.isnan(object_latent_mean).flatten().cpu().detach().numpy()):
+                # print('got nan error')
+                # import pdb; pdb.set_trace()
             object_latent_distribution = Normal(object_latent_mean, object_latent_var)
             object_latents = object_latent_distribution.rsample()
 
         # Use queries and object latents to decode the selected pixels for loss calculations
         queries = decoder_queries.unsqueeze(1).tile(1, self.hparams.num_object_slots, 1, 1) # \in B x K x N x S
         x = self.query_decoder(object_latents, queries) # \in B x K x N x (M*4)+1
+        # TS: we'll have two outputs from the query_decoder depending on which decoder queries we used
         per_object_preds = x[..., :3*self.hparams.num_gaussian_heads].unflatten(-1, (self.hparams.num_gaussian_heads, 3)) # \in B x K x N x M x 3
+        # TS: here have a function that matches the teacher object with its most likely slot
         per_mode_log_weights = nn.functional.log_softmax(x[..., 3*self.hparams.num_gaussian_heads : -1], -1) # \in B x K x N x M
         per_object_log_weights = nn.functional.log_softmax(x[..., -1], 1) # \in B x K x N
+        # TS: at this point we have the alphas for both types of queries
 
         # Independent gaussians for M values of R, M values of G, M values of B
         per_object_pixel_distributions = Normal(per_object_preds, self.hparams.sigma_x)
         ground_truth_rgb = data['ground_truth_rgb'].unsqueeze(1).unsqueeze(3) # \in B x 1 x N x 1 x 3
 
+        # TS: here we obtain teacher ground truth 
         per_object_pixel_log_likelihoods = per_object_pixel_distributions.log_prob(ground_truth_rgb) # \in B x K x N x M x 3
         # Sum across RGB because we assume the probabilities of each channel are independent, so log(P(R,G,B)) = log(P(R)P(G)P(B)) = log(P(R)) + log(P(G)) + log(P(B))
         per_object_pixel_log_likelihoods = per_object_pixel_log_likelihoods.sum(-1) # \in B x K x N x M
@@ -181,6 +186,7 @@ class SOCS(LightningModule):
         # Then apply logsumexp to add the weighted likelihoods in regular space and then convert back to log space
         weighted_mixture_log_likelihood = torch.logsumexp(per_object_pixel_log_likelihoods + per_mode_log_weights, -1) # \in B x K x N
         weighted_mixture_log_likelihood = torch.logsumexp(weighted_mixture_log_likelihood + per_object_log_weights, 1) # \in B x N
+        # TS: Perform loss calculation
 
         # If using semantic segmentation to mask out the background for the reconstruction loss, do that here
         reconstruction_loss = -(weighted_mixture_log_likelihood).mean()
