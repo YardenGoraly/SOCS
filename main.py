@@ -8,6 +8,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.data import Dataset, DataLoader
+import faulthandler
 
 from model import SOCS
 from util import fourier_embeddings
@@ -52,11 +53,13 @@ class SOCSDataset(Dataset):
     def _loaditem(self, idx):
         pass
 
-    def _set_pixels_to_decode(self, item):
+    def _set_pixels_to_decode(self, item, teacher_masks=None): # teacher_masks \in seq_len x H x W
         """
         Given a loaded sequence, find the positional embeddings for the transformer and the queries for
         the output decoder.
         """
+        #TS Pick a random object 
+
         num_frames = self.seq_len*len(self.camera_choice)
         random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
         decode_pixel_h_inds = slice(random_h_offset, self.img_dim_hw[0], self.decode_pixel_downsample_factor)
@@ -66,9 +69,14 @@ class SOCSDataset(Dataset):
         # Mask that determines which of the pixels in the input data will be decoded
         decode_mask = np.zeros((num_frames,) + self.img_dim_hw, dtype='bool')
         decode_mask[:, decode_pixel_h_inds, decode_pixel_w_inds] = True
+        # TS: create another decode_mask with indices that are in the selected object
+        #do np.random.choice(pixels_where_pixel==obj_id, replace = False)
+        #do np.random.choice(pixels_where_pixel!=obj_id, replace = False) for the other query (we don't want object pixels in this)
 
         all_inds = np.array(np.meshgrid(range(num_frames), range(self.img_dim_hw[0]), range(self.img_dim_hw[1]), indexing='ij')) #SAM put this in model.py for choosing the pixel to decode
+        # print('all_inds shape', all_inds.shape)
         decode_inds = all_inds[:, decode_mask].T # /in num_p x 3
+        # print('decode_inds shape', decode_inds.shape)
 
         img_seq = item['img_seq']
         viewpoint_seq = item['viewpoint_seq']
@@ -123,6 +131,7 @@ class SOCSDataset(Dataset):
             patch_positional_embeddings = patch_positional_embeddings.astype('float32'),
             decoder_queries = decoder_queries.astype('float32'),
         )
+        # TS: maybe treat decoder_queries separately for random vs object?
 
         if 'bc_waypoints' in item:
             data['bc_waypoints'] = item['bc_waypoints']
@@ -198,7 +207,11 @@ class InferenceDataset(LocalDataset):
         return item
 
 if __name__ == '__main__':
+    print('here')
+    # torch.autograd.set_detect_anomaly(True)
     parser = argparse.ArgumentParser()
+
+    faulthandler.enable()
 
     # Basic training parameters
     parser.add_argument('--name', default='SOCS')
@@ -251,20 +264,27 @@ if __name__ == '__main__':
         default_num_object_slots = 21
 
 
-    if args.dataset == 'movi':
-        #set num patches width and height
-        img_dim_hw = (256, 256)
-        default_patches_hw = (16, 16) #size of image dimension / 16
-        viewpoint_size = 4
-        default_num_object_slots = 64
+    # if args.dataset == 'movi':
+    #     #set num patches width and height
+    #     img_dim_hw = (256, 256)
+    #     default_patches_hw = (16, 16) #size of image dimension / 16
+    #     viewpoint_size = 4
+    #     default_num_object_slots = 64
 
     # if args.dataset == 'movi':
     # #fill this in
     # #set num patches width and height
-    # img_dim_hw = (64, 64)
-    # default_patches_hw = (4, 4) #size of image dimension / 16
-    # viewpoint_size = 4
-    # default_num_object_slots = 16 #default_patches_hw/2 multiplied #can try downsampling to 128x128 images or 64x64 using pillow
+    #     img_dim_hw = (64, 64)
+    #     default_patches_hw = (4, 4) #size of image dimension / 16
+    #     viewpoint_size = 4
+    #     default_num_object_slots = 16 #default_patches_hw/2 multiplied #can try downsampling to 128x128 images or 64x64 using pillow
+
+    if args.dataset == 'movi':
+        #set num patches width and height
+        img_dim_hw = (128, 128)
+        default_patches_hw = (8, 8) #size of image dimension / 16
+        viewpoint_size = 4
+        default_num_object_slots = 16
 
 
     viewpoint_size *= (1 + 2*args.num_fourier_bands)
