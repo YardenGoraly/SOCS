@@ -32,7 +32,7 @@ def make_train_seqs(first_seq_num, unique_start_ids, in_dir, out_dir):
     #videos should have 8 frames
     counter = 0
     # print('here', train_videos)
-    for video in train_videos:
+    for video in train_videos[:1]:
         print('generating video', counter)
         counter += 1
         video_path = os.path.join(in_dir, video)

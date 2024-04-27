@@ -57,7 +57,16 @@ class SOCSDataset(Dataset):
         Given a loaded sequence, find the positional embeddings for the transformer and the queries for
         the output decoder.
         """
+
+        teacher_masks = np.load('sam_masks_gen/train/0.npz')
+        teacher_masks = teacher_masks['rgb']
+        print('teacher masks', teacher_masks.shape)
+        obj_ids = np.unique(teacher_masks[0][0])
+        # print('teacher masks', np.unique(teacher_masks['rgb'][0][0]))
+
         #TS Pick a random object 
+        obj_id = np.random.choice(max(obj_ids)) + 1
+        print('chosen object', obj_id)
 
         num_frames = self.seq_len*len(self.camera_choice)
         random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
@@ -259,20 +268,20 @@ if __name__ == '__main__':
         default_num_object_slots = 21
 
 
-    if args.dataset == 'movi':
-        #set num patches width and height
-        img_dim_hw = (256, 256)
-        default_patches_hw = (16, 16) #size of image dimension / 16
-        viewpoint_size = 4
-        default_num_object_slots = 64
-
     # if args.dataset == 'movi':
-    # #fill this in
-    # #set num patches width and height
-    # img_dim_hw = (64, 64)
-    # default_patches_hw = (4, 4) #size of image dimension / 16
-    # viewpoint_size = 4
-    # default_num_object_slots = 16 #default_patches_hw/2 multiplied #can try downsampling to 128x128 images or 64x64 using pillow
+    #     #set num patches width and height
+    #     img_dim_hw = (256, 256)
+    #     default_patches_hw = (16, 16) #size of image dimension / 16
+    #     viewpoint_size = 4
+    #     default_num_object_slots = 64
+
+    if args.dataset == 'movi':
+        #fill this in
+        #set num patches width and height
+        img_dim_hw = (128, 128)
+        default_patches_hw = (8, 8) #size of image dimension / 16
+        viewpoint_size = 4
+        default_num_object_slots = 16 #default_patches_hw/2 multiplied #can try downsampling to 128x128 images or 64x64 using pillow
 
 
     viewpoint_size *= (1 + 2*args.num_fourier_bands)
