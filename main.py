@@ -60,9 +60,8 @@ class SOCSDataset(Dataset):
 
         teacher_masks = np.load('sam_masks_gen/train/0.npz')
         teacher_masks = teacher_masks['rgb']
-        print('teacher masks', teacher_masks.shape)
+        # print('teacher masks', teacher_masks.shape)
         obj_ids = np.unique(teacher_masks[0][0])
-        # print('teacher masks', np.unique(teacher_masks['rgb'][0][0]))
 
         #TS Pick a random object 
         obj_id = np.random.choice(max(obj_ids)) + 1
@@ -77,7 +76,17 @@ class SOCSDataset(Dataset):
         # Mask that determines which of the pixels in the input data will be decoded
         decode_mask = np.zeros((num_frames,) + self.img_dim_hw, dtype='bool')
         decode_mask[:, decode_pixel_h_inds, decode_pixel_w_inds] = True
+
         # TS: create another decode_mask with indices that are in the selected object
+        pixel_in_object_inds = np.where(teacher_masks[0][0] == obj_id)
+        random_inds_in_object = np.random.choice(pixel_in_object_inds[0].shape[0], size=10, replace=False)
+        inds_in_object_x = pixel_in_object_inds[0][random_inds_in_object]
+        inds_in_object_y = pixel_in_object_inds[1][random_inds_in_object]
+
+        decode_mask_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
+        decode_mask_object[:, inds_in_object_x, inds_in_object_y] = True
+        # print('check that the result of this is obj id', teacher_masks[0][0][inds_in_object_x[0]][inds_in_object_y[0]])
+
         #do np.random.choice(pixels_where_pixel==obj_id, replace = False)
         #do np.random.choice(pixels_where_pixel!=obj_id, replace = False) for the other query (we don't want object pixels in this)
 
@@ -85,6 +94,8 @@ class SOCSDataset(Dataset):
         # print('all_inds shape', all_inds.shape)
         decode_inds = all_inds[:, decode_mask].T # /in num_p x 3
         # print('decode_inds shape', decode_inds.shape)
+
+        decode_inds_object = all_inds[:, decode_mask_object].T
 
         img_seq = item['img_seq']
         viewpoint_seq = item['viewpoint_seq']
