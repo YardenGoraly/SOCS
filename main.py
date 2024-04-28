@@ -3,6 +3,7 @@ import numpy as np
 import os
 import torch
 import torch.nn.functional as F
+import cv2
 
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -60,12 +61,15 @@ class SOCSDataset(Dataset):
 
         teacher_masks = np.load('sam_masks_gen/train/0.npz')
         teacher_masks = teacher_masks['rgb']
-        # print('teacher masks', teacher_masks.shape)
+        scaled_sequence = np.zeros((teacher_masks.shape[0], 1, 128, 128))
+        for i in range(teacher_masks.shape[0]):
+            scaled_sequence[i][0] = cv2.resize(teacher_masks[i][0], dsize=(128, 128), interpolation=cv2.INTER_CUBIC)
+        teacher_masks = scaled_sequence
         obj_ids = np.unique(teacher_masks[0][0])
 
         #TS Pick a random object 
-        obj_id = np.random.choice(max(obj_ids)) + 1
-        print('chosen object', obj_id)
+        obj_id = np.random.choice(int(max(obj_ids))) + 1
+        # print('chosen object', obj_id)
 
         num_frames = self.seq_len*len(self.camera_choice)
         random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
@@ -102,6 +106,9 @@ class SOCSDataset(Dataset):
         # print('decode_inds shape', decode_inds.shape)
 
         decode_inds_object = all_inds[:, decode_mask_object].T
+
+        decode_total = np.concatenate((decode_inds, decode_inds_object))
+        print('shapes', decode_inds.shape, decode_inds_object.shape, decode_total.shape)
 
         img_seq = item['img_seq']
         viewpoint_seq = item['viewpoint_seq']
