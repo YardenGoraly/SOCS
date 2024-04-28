@@ -13,7 +13,7 @@ def save_train_seq(seq, seq_num, out_dir):
     seq_len = 8
     viewpoint_transform = np.zeros((seq_len, 1, 4))
     timestamps = np.linspace(0, 1, seq_len)
-    # seq = seq.astype('float') / 255  may or may not be necessary
+    seq = seq.astype('float') / 255 # may or may not be necessary
 
     print('saving')
     print('out_dir', out_dir)

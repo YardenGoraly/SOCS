@@ -87,37 +87,22 @@ class TransformerBlock(nn.Module):
             self.activation = activation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # if sum(torch.isnan(x).flatten().cpu().detach().numpy()):
-        #     print('got nan error here4')
-            # import pdb; pdb.set_trace()
         if self.norm_first:
             x = x + self._sa_block(self.norm1(x))
             x = x + self._ff_block(self.norm2(x))
-            # if sum(torch.isnan(x).flatten().cpu().detach().numpy()):
-            #     print('got nan error here0')
-                # import pdb; pdb.set_trace()
         else:
             x = self.norm1(x + self._sa_block(x))
             x = self.norm2(x + self._ff_block(x))
-            # if sum(torch.isnan(x).flatten().cpu().detach().numpy()):
-            #     print('got nan error here1')
-                # import pdb; pdb.set_trace()
         return x
 
     # self-attention block
     def _sa_block(self, x: torch.Tensor) -> torch.Tensor:
         x = self.self_attn(x, x, x, need_weights=False)[0]
-        if sum(torch.isnan(x).flatten().cpu().detach().numpy()):
-                print('got nan error here2')
-                import pdb; pdb.set_trace()
         return self.dropout1(x)
 
     # feed forward block
     def _ff_block(self, x: torch.Tensor) -> torch.Tensor:
         x = self.linear2(self.dropout(self.activation(self.linear1(x))))
-        if sum(torch.isnan(x).flatten().cpu().detach().numpy()):
-            print('got nan error here3')
-            import pdb; pdb.set_trace()
         return self.dropout2(x)
 
 class QueryDecoder(nn.Module):
