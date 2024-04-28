@@ -82,11 +82,17 @@ class SOCSDataset(Dataset):
         random_inds_in_object = np.random.choice(pixel_in_object_inds[0].shape[0], size=10, replace=False)
         inds_in_object_x = pixel_in_object_inds[0][random_inds_in_object]
         inds_in_object_y = pixel_in_object_inds[1][random_inds_in_object]
-
         decode_mask_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
         decode_mask_object[:, inds_in_object_x, inds_in_object_y] = True
         # print('check that the result of this is obj id', teacher_masks[0][0][inds_in_object_x[0]][inds_in_object_y[0]])
 
+        # TS: create decode_mask with indices that are not in selected object
+        pixel_not_in_object_inds = np.where(teacher_masks[0][0] != obj_id)
+        random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=10, replace=False)
+        inds_not_in_object_x = pixel_not_in_object_inds[0][random_inds_not_in_object]
+        inds_not_in_object_y = pixel_not_in_object_inds[1][random_inds_not_in_object]
+        decode_mask_not_in_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
+        decode_mask_not_in_object[:, inds_not_in_object_x, inds_not_in_object_y] = True
         #do np.random.choice(pixels_where_pixel==obj_id, replace = False)
         #do np.random.choice(pixels_where_pixel!=obj_id, replace = False) for the other query (we don't want object pixels in this)
 
