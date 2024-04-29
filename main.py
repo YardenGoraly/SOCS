@@ -106,9 +106,10 @@ class SOCSDataset(Dataset):
         # print('decode_inds shape', decode_inds.shape)
 
         decode_inds_object = all_inds[:, decode_mask_object].T
+        decode_inds_not_in_object = all_inds[:, decode_mask_not_in_object].T
 
-        decode_total = np.concatenate((decode_inds, decode_inds_object))
-        print('shapes', decode_inds.shape, decode_inds_object.shape, decode_total.shape)
+        decode_inds = np.concatenate((decode_inds_object, decode_inds_not_in_object))
+        # print('shapes', decode_inds.shape, decode_total.shape)
 
         img_seq = item['img_seq']
         viewpoint_seq = item['viewpoint_seq']
@@ -159,7 +160,7 @@ class SOCSDataset(Dataset):
             decode_dims = np.array([num_frames, 
                            self.img_dim_hw[0] // self.decode_pixel_downsample_factor,
                            self.img_dim_hw[1] // self.decode_pixel_downsample_factor]),
-            ground_truth_rgb = img_seq[decode_mask],
+            ground_truth_rgb = img_seq[decode_mask_object + decode_mask_not_in_object],
             patch_positional_embeddings = patch_positional_embeddings.astype('float32'),
             decoder_queries = decoder_queries.astype('float32'),
         )
