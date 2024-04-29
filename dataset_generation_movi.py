@@ -17,8 +17,8 @@ def save_train_seq(seq, seq_num, out_dir):
     timestamps = np.linspace(0, 1, seq_len)
     seq = seq.astype('float') / 255 # normalizes the RGB's (important)
 
-    print('saving')
-    print('out_dir', out_dir)
+    # print('saving')
+    # print('out_dir', out_dir)
     with open(os.path.join(out_dir, f'{seq_num}.npz'), 'wb') as f:
         np.savez_compressed(f, rgb=seq[:, None],
                             viewpoint_transform=viewpoint_transform,
@@ -36,11 +36,11 @@ def make_train_seqs(in_dir, out_dir, num_seq):
     imgs_arr = []
     #videos should have 8 frames
     counter = 0
-    for video in train_videos[:num_seq]:
-        print('generating video', counter)
+    for video in tqdm(train_videos[:num_seq]):
+        # print('generating video', counter)
         counter += 1
         video_path = os.path.join(in_dir, video)
-        for image in os.listdir(video_path):
+        for image in sorted(os.listdir(video_path)):
             img = Image.open(os.path.join(in_dir, video, image))
             arr = np.asarray(img, dtype='uint8')[..., :-1]
             imgs_arr += [arr]
@@ -75,4 +75,4 @@ if __name__ == '__main__':
         else:
             unique_start_ids = {}
 
-        new_seq_num = make_train_seqs(in_dir, out_dir, args.num_seq)
+        new_seq_num = make_train_seqs(in_dir, out_dir, int(args.num_seq))
