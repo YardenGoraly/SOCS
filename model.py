@@ -179,6 +179,11 @@ class SOCS(LightningModule):
         ground_truth_rgb = data['ground_truth_rgb'].unsqueeze(1).unsqueeze(3) # \in B x 1 x N x 1 x 3
 
         # TS: here we obtain teacher ground truth 
+               # TS: here we can create teacher ground truth in slot representation (bottom right of diagram)
+        # TS: calculate loss by comparing teacher representation to the output of the query decoder
+        # TS: Perform loss calculation
+
+        # below is for reconstruction loss
         per_object_pixel_log_likelihoods = per_object_pixel_distributions.log_prob(ground_truth_rgb) # \in B x K x N x M x 3
         # Sum across RGB because we assume the probabilities of each channel are independent, so log(P(R,G,B)) = log(P(R)P(G)P(B)) = log(P(R)) + log(P(G)) + log(P(B))
         per_object_pixel_log_likelihoods = per_object_pixel_log_likelihoods.sum(-1) # \in B x K x N x M
@@ -186,7 +191,6 @@ class SOCS(LightningModule):
         # Then apply logsumexp to add the weighted likelihoods in regular space and then convert back to log space
         weighted_mixture_log_likelihood = torch.logsumexp(per_object_pixel_log_likelihoods + per_mode_log_weights, -1) # \in B x K x N
         weighted_mixture_log_likelihood = torch.logsumexp(weighted_mixture_log_likelihood + per_object_log_weights, 1) # \in B x N
-        # TS: Perform loss calculation
 
         # If using semantic segmentation to mask out the background for the reconstruction loss, do that here
         reconstruction_loss = -(weighted_mixture_log_likelihood).mean()
