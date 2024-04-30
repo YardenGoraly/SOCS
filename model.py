@@ -108,36 +108,23 @@ class SOCS(LightningModule):
         positional_embeddings = data['patch_positional_embeddings'] # \in B x T x Y x X x S
         batch_size = x.shape[0]
         num_frame_slots = x.shape[1]
-        # import pdb; pdb.set_trace()
         # Encode the entire sequence of images
         x = self.encoder(x) # \in B x T x U x V x E - S
-        # if sum(torch.isnan(x).flatten().cpu().detach().numpy()):
-        #     print('got nan error here0')
-        #     import pdb; pdb.set_trace()
         x = torch.cat((x, positional_embeddings), -1).flatten(1, 3) # \in B x T*U*V x E
 
         # Transformers
         x = x.moveaxis(0, 1) # \in T*U*V x B x E
         x = self.transformer_1(x)
-        # if sum(torch.isnan(x).flatten().cpu().detach().numpy()):
-        #     print('got nan error here1')
-        #     import pdb; pdb.set_trace()
         # unflatten back to T x U x V x B x E
         x = x.reshape((num_frame_slots, self.hparams.spatial_patch_hw[0], self.hparams.spatial_patch_hw[1], batch_size, self.transformer_dim))
         x = x.moveaxis(1, -1).moveaxis(1, -1) # \in T x B x E x U x V
         x = x.flatten(0, 1) # \in T*B x E x U x V
         x = self.spatial_pool(x).mul(2) # \in T*B x E x sqrt(K) x sqrt(K)
-        # if sum(torch.isnan(x).flatten().cpu().detach().numpy()):
-        #     print('got nan error here2')
-        #     import pdb; pdb.set_trace()
         x = x.reshape((num_frame_slots, batch_size) + x.shape[1:]) # \in T x B x E x sqrt(K) x sqrt(K)
         x = x.flatten(3, 4) # \in T x B x E x K
         x = x.moveaxis(-1, 1) # \in T x K x B x E
         x = x.flatten(0, 1) # \in T*K x B x E
         x = self.transformer_2(x)
-        # if sum(torch.isnan(x).flatten().cpu().detach().numpy()):
-        #     print('got nan error here3')
-        #     import pdb; pdb.set_trace()
         x = x.moveaxis(1, 0) # \in B x T*K x E
         x = x.reshape((batch_size, num_frame_slots, self.hparams.num_object_slots, self.transformer_dim)) # Uncollapse the patches
 
@@ -185,9 +172,6 @@ class SOCS(LightningModule):
         mask_loss = torch.norm(per_object_log_weights[:, :, 0:N//2] - ground_truth_mask[:, :, 0:N//2])
         mask_loss += torch.norm(per_object_log_weights[:, most_likely_slot, N//2:] - ground_truth_mask[:, most_likely_slot, N//2:])
         print('here', mask_loss)
-
-        # TS: calculate loss by comparing teacher representation to the output of the query decoder
-        # TS: Perform loss calculation
 
         # below is for reconstruction loss
         per_object_pixel_log_likelihoods = per_object_pixel_distributions.log_prob(ground_truth_rgb) # \in B x K x N x M x 3
