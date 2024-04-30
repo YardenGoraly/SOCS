@@ -148,7 +148,6 @@ class SOCS(LightningModule):
     def decode_latents(self, data, slot_tokens, eval=False):
         output = {}
         decoder_queries = data['decoder_queries'] # \in B x N x S
-        # TS: could have a line here for decoder_queries_obj = data['decoder_queries_objects']
         object_latent_pars = self.latent_decoder(slot_tokens)
         object_latent_mean = object_latent_pars[..., :self.hparams.embed_dim] # \in B x K x E
 
@@ -157,21 +156,18 @@ class SOCS(LightningModule):
         else:
             object_latent_var = nn.functional.softplus(object_latent_pars[..., self.hparams.embed_dim:])
             # Sample object latents from gaussian distribution
-            # print('here', sum(torch.isnan(object_latent_var).flatten().cpu().detach().numpy()))
-            # if sum(torch.isnan(object_latent_var).flatten().cpu().detach().numpy()) or sum(torch.isnan(object_latent_mean).flatten().cpu().detach().numpy()):
-                # print('got nan error')
-                # import pdb; pdb.set_trace()
             object_latent_distribution = Normal(object_latent_mean, object_latent_var)
             object_latents = object_latent_distribution.rsample()
 
         # Use queries and object latents to decode the selected pixels for loss calculations
         queries = decoder_queries.unsqueeze(1).tile(1, self.hparams.num_object_slots, 1, 1) # \in B x K x N x S
         x = self.query_decoder(object_latents, queries) # \in B x K x N x (M*4)+1
-        # TS: we'll have two outputs from the query_decoder depending on which decoder queries we used
         per_object_preds = x[..., :3*self.hparams.num_gaussian_heads].unflatten(-1, (self.hparams.num_gaussian_heads, 3)) # \in B x K x N x M x 3
-        # TS: here have a function that matches the teacher object with its most likely slot
         per_mode_log_weights = nn.functional.log_softmax(x[..., 3*self.hparams.num_gaussian_heads : -1], -1) # \in B x K x N x M
         per_object_log_weights = nn.functional.log_softmax(x[..., -1], 1) # \in B x K x N
+        
+        # TS: here have a function that matches the teacher object with its most likely slot
+        most_likely_slot = torch.mode(torch.argmax(per_object_log_weights.sum(2), dim=1))
         # TS: at this point we have the alphas for both types of queries
 
         # Independent gaussians for M values of R, M values of G, M values of B
