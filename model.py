@@ -165,9 +165,9 @@ class SOCS(LightningModule):
         per_object_preds = x[..., :3*self.hparams.num_gaussian_heads].unflatten(-1, (self.hparams.num_gaussian_heads, 3)) # \in B x K x N x M x 3
         per_mode_log_weights = nn.functional.log_softmax(x[..., 3*self.hparams.num_gaussian_heads : -1], -1) # \in B x K x N x M
         per_object_log_weights = nn.functional.log_softmax(x[..., -1], 1) # \in B x K x N
-        
+
         # TS: here have a function that matches the teacher object with its most likely slot
-        most_likely_slot = torch.mode(torch.argmax(per_object_log_weights.sum(2), dim=1))
+        most_likely_slot = torch.mode(torch.argmax(per_object_log_weights.sum(2), dim=1))[0] #TODO: do I need to only choose the first half of the queries?
         # TS: at this point we have the alphas for both types of queries
 
         # Independent gaussians for M values of R, M values of G, M values of B
@@ -176,6 +176,16 @@ class SOCS(LightningModule):
 
         # TS: here we obtain teacher ground truth 
                # TS: here we can create teacher ground truth in slot representation (bottom right of diagram)
+        N = per_object_log_weights.shape[2]
+        ground_truth_mask = torch.zeros_like(per_object_log_weights)
+        ones_array = torch.zeros(1, N)
+        ones_array[:, 0:N//2] = 1
+        ground_truth_mask[:, most_likely_slot] = ones_array
+        # print('here', ground_truth_mask.shape)
+        mask_loss = torch.norm(per_object_log_weights[:, :, 0:N//2] - ground_truth_mask[:, :, 0:N//2])
+        mask_loss += torch.norm(per_object_log_weights[:, most_likely_slot, N//2:] - ground_truth_mask[:, most_likely_slot, N//2:])
+        print('here', mask_loss)
+
         # TS: calculate loss by comparing teacher representation to the output of the query decoder
         # TS: Perform loss calculation
 
