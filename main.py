@@ -164,7 +164,6 @@ class SOCSDataset(Dataset):
             patch_positional_embeddings = patch_positional_embeddings.astype('float32'),
             decoder_queries = decoder_queries.astype('float32'),
         )
-        # TS: maybe treat decoder_queries separately for random vs object?
 
         if 'bc_waypoints' in item:
             data['bc_waypoints'] = item['bc_waypoints']
