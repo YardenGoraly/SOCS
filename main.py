@@ -58,20 +58,17 @@ class SOCSDataset(Dataset):
         Given a loaded sequence, find the positional embeddings for the transformer and the queries for
         the output decoder.
         """
-        # import pdb; pdb.set_trace()
         teacher_masks = item['teacher_masks_seq']
         scaled_sequence = np.zeros((teacher_masks.shape[0], 1, 128, 128))
         for i in range(teacher_masks.shape[0]):
             scaled_sequence[i][0] = cv2.resize(teacher_masks[i][0], dsize=(128, 128), interpolation=cv2.INTER_CUBIC)
         teacher_masks = scaled_sequence
-        # print('here1', np.unique(teacher_masks[0][0]))
         obj_ids = np.unique(teacher_masks[0][0])
 
         #TS Pick a random object
         obj_id = 0
         if int(max(obj_ids)) != 0:
             obj_id = np.random.choice(int(max(obj_ids))) + 1
-        # print('chosen object', obj_id)
 
         num_frames = self.seq_len*len(self.camera_choice)
         random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
@@ -91,34 +88,25 @@ class SOCSDataset(Dataset):
         decode_mask_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
         decode_mask_object[:, inds_in_object_x, inds_in_object_y] = True
         
-        # print('check that the result of this is obj id', teacher_masks[0][0][inds_in_object_x[0]][inds_in_object_y[0]])
-
         # TS: create decode_mask with indices that are not in selected object
         if obj_id != 0:
             pixel_not_in_object_inds = np.where(teacher_masks[0][0] != obj_id)
             random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=10, replace=False)
         else:
-            # print('here1', decode_mask_object.shape, teacher_masks.shape)
             pixel_not_in_object_inds = np.where(decode_mask_object[0] != True)
             random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=10, replace=False)
         inds_not_in_object_x = pixel_not_in_object_inds[0][random_inds_not_in_object]
         inds_not_in_object_y = pixel_not_in_object_inds[1][random_inds_not_in_object]
         decode_mask_not_in_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
         decode_mask_not_in_object[:, inds_not_in_object_x, inds_not_in_object_y] = True
-        #do np.random.choice(pixels_where_pixel==obj_id, replace = False)
-        #do np.random.choice(pixels_where_pixel!=obj_id, replace = False) for the other query (we don't want object pixels in this)
 
         all_inds = np.array(np.meshgrid(range(num_frames), range(self.img_dim_hw[0]), range(self.img_dim_hw[1]), indexing='ij')) #SAM put this in model.py for choosing the pixel to decode
-        # print('all_inds shape', all_inds.shape)
         decode_inds = all_inds[:, decode_mask].T # /in num_p x 3
-        # print('decode_inds shape', decode_inds.shape)
 
         decode_inds_object = all_inds[:, decode_mask_object].T
         decode_inds_not_in_object = all_inds[:, decode_mask_not_in_object].T
 
-        # print('here', decode_inds_object.shape, decode_inds_not_in_object.shape)
         decode_inds = np.concatenate((decode_inds_object, decode_inds_not_in_object))
-        # print('shapes', decode_inds.shape)
 
         img_seq = item['img_seq']
      
@@ -128,7 +116,6 @@ class SOCSDataset(Dataset):
         for i in range(img_seq.shape[0]):
             scaled_sequence_student[i] = cv2.resize(img_seq[i], dsize=(128, 128), interpolation=cv2.INTER_CUBIC)
         img_seq = scaled_sequence_student
-        # print('here0', img_seq.shape)
 
         viewpoint_seq = item['viewpoint_seq']
         # Remove the last row of the transform matrix if it's stored
@@ -173,19 +160,7 @@ class SOCSDataset(Dataset):
                     base_patch_embeddings[i,j,k] = np.array([time_offset, patch_y_offset, patch_x_offset, *view_offset])
 
         patch_positional_embeddings = fourier_embeddings(base_patch_embeddings, self.num_fourier_bands, self.fourier_sampling_rate)
-        # print('here', img_seq.shape, (decode_mask_object + decode_mask_not_in_object).shape, img_seq[decode_mask_object + decode_mask_not_in_object, :].shape)
 
-        ground_truth = np.transpose(img_seq, (3, 0, 1, 2))
-        # print('here0', ground_truth[0].shape, (decode_mask_object + decode_mask_not_in_object).shape)
-        x = ground_truth[0][decode_mask_object + decode_mask_not_in_object]
-        y = ground_truth[1][decode_mask_object + decode_mask_not_in_object]
-        z = ground_truth[2][decode_mask_object + decode_mask_not_in_object]
-        import pdb; pdb.set_trace()
-        # ground_truth = np.transpose(img_seq, (1, 2, 3, 0))
-
-        print('here', ground_truth.shape)
-
-        # print('here', img_seq[decode_mask_object + decode_mask_not_in_object].shape, decode_mask_object.shape, decode_mask_not_in_object.shape, img_seq.shape, obj_id)
         data = dict(
             img_seq = img_seq.astype('float32'),
             decode_dims = np.array([num_frames, 

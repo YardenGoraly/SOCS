@@ -176,7 +176,6 @@ class SOCS(LightningModule):
         mask_loss = torch.norm(per_object_log_weights[:, :, 0:N//2] - ground_truth_mask[:, :, 0:N//2]) + \
                     torch.norm(per_object_log_weights[:, most_likely_slot, N//2:] - ground_truth_mask[:, most_likely_slot, N//2:])
         output['mask_loss'] = mask_loss
-        # print('mask loss:', mask_loss)
 
         # below is for reconstruction loss
         per_object_pixel_log_likelihoods = per_object_pixel_distributions.log_prob(ground_truth_rgb) # \in B x K x N x M x 3
@@ -343,7 +342,7 @@ class SOCS(LightningModule):
         """
         Show the reconstructed RGB image.
         """
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         img_arr = preds.reshape(dims +  (3,))[idx]
         img_arr = np.clip(img_arr, 0, 1) * 255
         return img_arr.astype('uint8')
