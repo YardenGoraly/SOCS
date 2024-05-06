@@ -38,6 +38,7 @@ class CNNEncoder(nn.Module):
     # input \in B x T x H x W x 3
     # output \in B x T x U x V x E
     def forward(self, x):
+        # import pdb; pdb.set_trace()
         batch_size = x.shape[0]
         num_frames = x.shape[1]
 

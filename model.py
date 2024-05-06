@@ -100,6 +100,7 @@ class SOCS(LightningModule):
     # E - embedding dim, N - number of pixels to decode across all frames in sequence, K - number of object slots
     # S - viewpoint supervision dimension
     def forward(self, data):
+        torch.autograd.set_detect_anomaly(True)
         slot_tokens = self.get_slot_tokens(data)
         return self.decode_latents(data, slot_tokens)
 
@@ -109,6 +110,7 @@ class SOCS(LightningModule):
         batch_size = x.shape[0]
         num_frame_slots = x.shape[1]
         # Encode the entire sequence of images
+        # import pdb; pdb.set_trace()
         x = self.encoder(x) # \in B x T x U x V x E - S
         x = torch.cat((x, positional_embeddings), -1).flatten(1, 3) # \in B x T*U*V x E
 
@@ -166,12 +168,15 @@ class SOCS(LightningModule):
         N = per_object_log_weights.shape[2]
         ground_truth_mask = torch.zeros_like(per_object_log_weights)
         ones_array = torch.zeros(1, N)
+        ones_array = ones_array.clone()
         ones_array[:, 0:N//2] = 1
+        ground_truth_mask = ground_truth_mask.clone()
         ground_truth_mask[:, most_likely_slot] = ones_array
         # print('here', ground_truth_mask.shape)
-        mask_loss = torch.norm(per_object_log_weights[:, :, 0:N//2] - ground_truth_mask[:, :, 0:N//2])
-        mask_loss += torch.norm(per_object_log_weights[:, most_likely_slot, N//2:] - ground_truth_mask[:, most_likely_slot, N//2:])
-        print('here', mask_loss)
+        mask_loss = torch.norm(per_object_log_weights[:, :, 0:N//2] - ground_truth_mask[:, :, 0:N//2]) + \
+                    torch.norm(per_object_log_weights[:, most_likely_slot, N//2:] - ground_truth_mask[:, most_likely_slot, N//2:])
+        output['mask_loss'] = mask_loss
+        # print('mask loss:', mask_loss)
 
         # below is for reconstruction loss
         per_object_pixel_log_likelihoods = per_object_pixel_distributions.log_prob(ground_truth_rgb) # \in B x K x N x M x 3
@@ -213,8 +218,9 @@ class SOCS(LightningModule):
         output = self(batch)
         self.log('reconstruction_loss', output['reconstruction_loss'])
         self.log('distribution_loss', output['kl_loss'])
+        self.log('mask_loss', output['mask_loss'])
         loss = (output['reconstruction_loss']
-                + output['kl_loss'].mul(self.hparams.beta))
+                + output['kl_loss'].mul(self.hparams.beta) + output['mask_loss'])
         
         if self.hparams.bc_task:
             self.log('bc_loss', output['bc_loss'])
@@ -337,6 +343,7 @@ class SOCS(LightningModule):
         """
         Show the reconstructed RGB image.
         """
+        import pdb; pdb.set_trace()
         img_arr = preds.reshape(dims +  (3,))[idx]
         img_arr = np.clip(img_arr, 0, 1) * 255
         return img_arr.astype('uint8')

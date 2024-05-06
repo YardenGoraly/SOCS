@@ -6,15 +6,26 @@ from tqdm import tqdm
 def filter_out_missing(student_dir, teacher_dir, out_dir):
     student_sequences = sorted(os.listdir(student_dir))
     teacher_sequences = sorted(os.listdir(teacher_dir))
+    index = 0
     for seq in tqdm(student_sequences):
         if seq in teacher_sequences:
-            seq_path = os.path.join(student_dir, seq)
-            loaded_npz = np.load(seq_path)
-            np.savez_compressed(os.path.join(out_dir, seq))
+            student_seq_path = os.path.join(student_dir, seq)
+            teacher_seq_path = os.path.join(teacher_dir, seq)
+            student_loaded_npz = np.load(student_seq_path)
+            teacher_loaded_npz = np.load(teacher_seq_path)
+            np.savez_compressed(os.path.join(out_dir, str(index) + '.npz'),
+                                 rgb=student_loaded_npz['rgb'],
+                                viewpoint_transform=student_loaded_npz['viewpoint_transform'],
+                                time=student_loaded_npz['time'],
+                                bc_waypoints=None,
+                                bc_mask=None,
+                                teacher_masks=teacher_loaded_npz['masks']
+                                )
+            index += 1
 
 
 if __name__ == '__main__':
-    #example run: python match_npz_numbers.py train --student_dir=200x200_12500_gen --teacher_dir=teacher_masks --out_dir=fixed_200x200_12500_gen
+    #example run: python match_npz_numbers.py train --student_dir=200x200-12500-gen --teacher_dir=teacher_masks --out_dir=test_fixed
 
     parser = argparse.ArgumentParser()
     parser.add_argument('split', choices=['train', 'val'])
