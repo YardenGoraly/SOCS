@@ -3,12 +3,21 @@ import os
 import argparse
 from tqdm import tqdm
 
+
+def natural_sort(item):
+    a = item.split('_')[0]
+    #for sorting the array as per the starting number
+    b = int(item.split('_')[1])
+    #for sorting the array as per the number 
+    #which is followed by 'text'
+    return b
+
 def convert_to_videos(in_dir, out_dir, num_seq):
     #in_dir: /data/yardengoraly/object-detection-data/many_items_80000
     # Directory containing the PNG images
     image_dir = 'data_raw/train/video_0'
-    videos = sorted(os.listdir(in_dir))
-
+    videos = os.listdir(in_dir)
+    videos.sort(key=natural_sort)
     index = 0
     for video in tqdm(videos[:num_seq]):
         image_dir = os.path.join(in_dir, video)

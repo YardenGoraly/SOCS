@@ -3,25 +3,36 @@ import os
 import numpy as np
 from tqdm import tqdm
 
+def natural_sort(item):
+    a = int(item.split('.')[0])
+    #for sorting the array as per the starting number
+    b = item.split('.')[1]
+    #for sorting the array as per the number 
+    #which is followed by 'text'
+    return a
+
 def filter_out_missing(student_dir, teacher_dir, out_dir):
-    student_sequences = sorted(os.listdir(student_dir))
-    teacher_sequences = sorted(os.listdir(teacher_dir))
+    student_sequences = os.listdir(student_dir)
+    teacher_sequences = os.listdir(teacher_dir)
+    student_sequences.sort(key=natural_sort)
+    teacher_sequences.sort(key=natural_sort)
     index = 0
-    for seq in tqdm(student_sequences):
-        if seq in teacher_sequences:
-            student_seq_path = os.path.join(student_dir, seq)
-            teacher_seq_path = os.path.join(teacher_dir, seq)
-            student_loaded_npz = np.load(student_seq_path)
-            teacher_loaded_npz = np.load(teacher_seq_path)
-            np.savez_compressed(os.path.join(out_dir, str(index) + '.npz'),
-                                 rgb=student_loaded_npz['rgb'],
-                                viewpoint_transform=student_loaded_npz['viewpoint_transform'],
-                                time=student_loaded_npz['time'],
-                                bc_waypoints=None,
-                                bc_mask=None,
-                                teacher_masks=teacher_loaded_npz['masks']
-                                )
-            index += 1
+    # print('here', teacher_sequences[0:100])
+    for seq in tqdm(teacher_sequences):
+        student_seq_path = os.path.join(student_dir, seq)
+        teacher_seq_path = os.path.join(teacher_dir, seq)
+        # print('here', student_seq_path, teacher_seq_path)
+        student_loaded_npz = np.load(student_seq_path)
+        teacher_loaded_npz = np.load(teacher_seq_path)
+        np.savez_compressed(os.path.join(out_dir, str(index) + '.npz'),
+                                rgb=student_loaded_npz['rgb'],
+                            viewpoint_transform=student_loaded_npz['viewpoint_transform'],
+                            time=student_loaded_npz['time'],
+                            bc_waypoints=None,
+                            bc_mask=None,
+                            teacher_masks=teacher_loaded_npz['masks']
+                            )
+        index += 1
 
 
 if __name__ == '__main__':

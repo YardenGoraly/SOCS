@@ -58,55 +58,58 @@ class SOCSDataset(Dataset):
         Given a loaded sequence, find the positional embeddings for the transformer and the queries for
         the output decoder.
         """
-        teacher_masks = item['teacher_masks_seq']
-        scaled_sequence = np.zeros((teacher_masks.shape[0], 1, 128, 128))
-        for i in range(teacher_masks.shape[0]):
-            scaled_sequence[i][0] = cv2.resize(teacher_masks[i][0], dsize=(128, 128), interpolation=cv2.INTER_CUBIC)
-        teacher_masks = scaled_sequence
-        obj_ids = np.unique(teacher_masks[0][0])
-
-        #TS Pick a random object
-        obj_id = 0
-        if int(max(obj_ids)) != 0:
-            obj_id = np.random.choice(int(max(obj_ids))) + 1
 
         num_frames = self.seq_len*len(self.camera_choice)
-        random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
-        decode_pixel_h_inds = slice(random_h_offset, self.img_dim_hw[0], self.decode_pixel_downsample_factor)
-        random_w_offset = np.random.randint(self.decode_pixel_downsample_factor)
-        decode_pixel_w_inds = slice(random_w_offset, self.img_dim_hw[1], self.decode_pixel_downsample_factor)
-
-        # Mask that determines which of the pixels in the input data will be decoded
-        decode_mask = np.zeros((num_frames,) + self.img_dim_hw, dtype='bool')
-        decode_mask[:, decode_pixel_h_inds, decode_pixel_w_inds] = True
-
-        # TS: create another decode_mask with indices that are in the selected object
-        pixel_in_object_inds = np.where(teacher_masks[0][0] == obj_id)
-        random_inds_in_object = np.random.choice(pixel_in_object_inds[0].shape[0], size=10, replace=False)
-        inds_in_object_x = pixel_in_object_inds[0][random_inds_in_object]
-        inds_in_object_y = pixel_in_object_inds[1][random_inds_in_object]
-        decode_mask_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
-        decode_mask_object[:, inds_in_object_x, inds_in_object_y] = True
-        
-        # TS: create decode_mask with indices that are not in selected object
-        if obj_id != 0:
-            pixel_not_in_object_inds = np.where(teacher_masks[0][0] != obj_id)
-            random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=10, replace=False)
-        else:
-            pixel_not_in_object_inds = np.where(decode_mask_object[0] != True)
-            random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=10, replace=False)
-        inds_not_in_object_x = pixel_not_in_object_inds[0][random_inds_not_in_object]
-        inds_not_in_object_y = pixel_not_in_object_inds[1][random_inds_not_in_object]
-        decode_mask_not_in_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
-        decode_mask_not_in_object[:, inds_not_in_object_x, inds_not_in_object_y] = True
-
         all_inds = np.array(np.meshgrid(range(num_frames), range(self.img_dim_hw[0]), range(self.img_dim_hw[1]), indexing='ij')) #SAM put this in model.py for choosing the pixel to decode
-        decode_inds = all_inds[:, decode_mask].T # /in num_p x 3
+        if self.decode_pixel_downsample_factor == 1: 
+            random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
+            decode_pixel_h_inds = slice(random_h_offset, self.img_dim_hw[0], self.decode_pixel_downsample_factor)
+            random_w_offset = np.random.randint(self.decode_pixel_downsample_factor)
+            decode_pixel_w_inds = slice(random_w_offset, self.img_dim_hw[1], self.decode_pixel_downsample_factor)
 
-        decode_inds_object = all_inds[:, decode_mask_object].T
-        decode_inds_not_in_object = all_inds[:, decode_mask_not_in_object].T
+            # Mask that determines which of the pixels in the input data will be decoded
+            decode_mask = np.zeros((num_frames,) + self.img_dim_hw, dtype='bool')
+            decode_mask[:, decode_pixel_h_inds, decode_pixel_w_inds] = True
 
-        decode_inds = np.concatenate((decode_inds_object, decode_inds_not_in_object))
+            decode_inds = all_inds[:, decode_mask].T # /in num_p x 3
+        else:
+            teacher_masks = item['teacher_masks_seq']
+            scaled_sequence = np.zeros((teacher_masks.shape[0], 1, 128, 128))
+            for i in range(teacher_masks.shape[0]):
+                scaled_sequence[i][0] = cv2.resize(teacher_masks[i][0], dsize=(128, 128), interpolation=cv2.INTER_CUBIC)
+            teacher_masks = scaled_sequence
+            obj_ids = np.unique(teacher_masks[0][0])
+
+            #TS Pick a random object
+            obj_id = 0
+            if int(max(obj_ids)) != 0:
+                obj_id = np.random.choice(int(max(obj_ids))) + 1
+
+            # TS: create another decode_mask with indices that are in the selected object
+            pixel_in_object_inds = np.where(teacher_masks[0][0] == obj_id)
+            random_inds_in_object = np.random.choice(pixel_in_object_inds[0].shape[0], size=10, replace=False)
+            inds_in_object_x = pixel_in_object_inds[0][random_inds_in_object]
+            inds_in_object_y = pixel_in_object_inds[1][random_inds_in_object]
+            decode_mask_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
+            decode_mask_object[:, inds_in_object_x, inds_in_object_y] = True
+            
+            # TS: create decode_mask with indices that are not in selected object
+            if obj_id != 0:
+                pixel_not_in_object_inds = np.where(teacher_masks[0][0] != obj_id)
+                random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=10, replace=False)
+            else:
+                pixel_not_in_object_inds = np.where(decode_mask_object[0] != True)
+                random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=10, replace=False)
+            inds_not_in_object_x = pixel_not_in_object_inds[0][random_inds_not_in_object]
+            inds_not_in_object_y = pixel_not_in_object_inds[1][random_inds_not_in_object]
+            decode_mask_not_in_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
+            decode_mask_not_in_object[:, inds_not_in_object_x, inds_not_in_object_y] = True
+            decode_mask = decode_mask_object + decode_mask_not_in_object
+
+            decode_inds_object = all_inds[:, decode_mask_object].T
+            decode_inds_not_in_object = all_inds[:, decode_mask_not_in_object].T
+
+            decode_inds = np.concatenate((decode_inds_object, decode_inds_not_in_object))
 
         img_seq = item['img_seq']
      
@@ -160,13 +163,14 @@ class SOCSDataset(Dataset):
                     base_patch_embeddings[i,j,k] = np.array([time_offset, patch_y_offset, patch_x_offset, *view_offset])
 
         patch_positional_embeddings = fourier_embeddings(base_patch_embeddings, self.num_fourier_bands, self.fourier_sampling_rate)
-
+        # import pdb; pdb.set_trace()
+        # print('here', decode_mask.shape, img_seq[decode_mask].shape)
         data = dict(
             img_seq = img_seq.astype('float32'),
             decode_dims = np.array([num_frames, 
                            self.img_dim_hw[0] // self.decode_pixel_downsample_factor,
                            self.img_dim_hw[1] // self.decode_pixel_downsample_factor]),
-            ground_truth_rgb = img_seq[decode_mask_object + decode_mask_not_in_object],
+            ground_truth_rgb = img_seq[decode_mask],
             patch_positional_embeddings = patch_positional_embeddings.astype('float32'),
             decoder_queries = decoder_queries.astype('float32'),
         )
@@ -191,7 +195,10 @@ class LocalDataset(SOCSDataset):
             viewpoint_seq = data['viewpoint_transform'][:self.seq_len, self.camera_choice]
             viewpoint_seq = viewpoint_seq.reshape((num_frames,) + viewpoint_seq.shape[2:])
             time_seq = data['time'][:self.seq_len].flatten()
-            teacher_masks_seq = np.expand_dims(data['teacher_masks'], axis=1)
+            if 'teacher_masks' in data.keys():
+                teacher_masks_seq = np.expand_dims(data['teacher_masks'], axis=1)
+            else:
+                teacher_masks_seq = None
             # print('here', np.unique(teacher_masks_seq[0][0]))
 
             loaded_data = dict(img_seq=img_seq,

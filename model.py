@@ -110,7 +110,6 @@ class SOCS(LightningModule):
         batch_size = x.shape[0]
         num_frame_slots = x.shape[1]
         # Encode the entire sequence of images
-        # import pdb; pdb.set_trace()
         x = self.encoder(x) # \in B x T x U x V x E - S
         x = torch.cat((x, positional_embeddings), -1).flatten(1, 3) # \in B x T*U*V x E
 
@@ -178,6 +177,7 @@ class SOCS(LightningModule):
         output['mask_loss'] = mask_loss
 
         # below is for reconstruction loss
+        # import pdb; pdb.set_trace()
         per_object_pixel_log_likelihoods = per_object_pixel_distributions.log_prob(ground_truth_rgb) # \in B x K x N x M x 3
         # Sum across RGB because we assume the probabilities of each channel are independent, so log(P(R,G,B)) = log(P(R)P(G)P(B)) = log(P(R)) + log(P(G)) + log(P(B))
         per_object_pixel_log_likelihoods = per_object_pixel_log_likelihoods.sum(-1) # \in B x K x N x M
@@ -247,6 +247,8 @@ class SOCS(LightningModule):
             minibatch = {}
             minibatch['decoder_queries'] = batch['decoder_queries'][:, pixel_ind : pixel_ind + num_pix]
             minibatch['ground_truth_rgb'] = batch['ground_truth_rgb'][:, pixel_ind : pixel_ind + num_pix]
+            # import pdb; pdb.set_trace()
+            # print('here2', minibatch['ground_truth_rgb'].shape)
             if 'bc_waypoints' in batch:
                 minibatch['bc_waypoints'] = batch['bc_waypoints']
                 minibatch['bc_mask'] = batch['bc_mask']

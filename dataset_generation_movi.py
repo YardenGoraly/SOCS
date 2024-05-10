@@ -28,11 +28,20 @@ def save_train_seq(seq, seq_num, out_dir):
     
     return
 
+def natural_sort(item):
+    a = item.split('_')[0]
+    #for sorting the array as per the starting number
+    b = int(item.split('_')[1])
+    #for sorting the array as per the number 
+    #which is followed by 'text'
+    return b
+
 def make_train_seqs(in_dir, out_dir, num_seq):
     """
     Generates num_seq sequences in .npz format
     """
-    train_videos = sorted(os.listdir(in_dir))
+    train_videos = os.listdir(in_dir)
+    train_videos.sort(key=natural_sort)
     imgs_arr = []
     #videos should have 8 frames
     counter = 0
