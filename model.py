@@ -155,7 +155,7 @@ class SOCS(LightningModule):
         per_object_log_weights = nn.functional.log_softmax(x[..., -1], 1) # \in B x K x N
 
         # TS: here have a function that matches the teacher object with its most likely slot
-        most_likely_slot = torch.mode(torch.argmax(per_object_log_weights.sum(2), dim=1))[0] #TODO: do I need to only choose the first half of the queries?
+        most_likely_slot = torch.mode(torch.argmax(per_object_log_weights[:, :, :80].sum(2), dim=1))[0] #TODO: do I need to only choose the first half of the queries?
         # TS: at this point we have the alphas for both types of queries
 
         # Independent gaussians for M values of R, M values of G, M values of B
@@ -172,12 +172,12 @@ class SOCS(LightningModule):
         ground_truth_mask = ground_truth_mask.clone()
         ground_truth_mask[:, most_likely_slot] = ones_array
         # print('here', ground_truth_mask.shape)
+        # import pdb; pdb.set_trace()
         mask_loss = torch.norm(per_object_log_weights[:, :, 0:N//2] - ground_truth_mask[:, :, 0:N//2]) + \
                     torch.norm(per_object_log_weights[:, most_likely_slot, N//2:] - ground_truth_mask[:, most_likely_slot, N//2:])
-        output['mask_loss'] = mask_loss
+        output['mask_loss'] = mask_loss #add coefficient hyperparameter and tune
 
         # below is for reconstruction loss
-        # import pdb; pdb.set_trace()
         per_object_pixel_log_likelihoods = per_object_pixel_distributions.log_prob(ground_truth_rgb) # \in B x K x N x M x 3
         # Sum across RGB because we assume the probabilities of each channel are independent, so log(P(R,G,B)) = log(P(R)P(G)P(B)) = log(P(R)) + log(P(G)) + log(P(B))
         per_object_pixel_log_likelihoods = per_object_pixel_log_likelihoods.sum(-1) # \in B x K x N x M
@@ -219,7 +219,7 @@ class SOCS(LightningModule):
         self.log('distribution_loss', output['kl_loss'])
         self.log('mask_loss', output['mask_loss'])
         loss = (output['reconstruction_loss']
-                + output['kl_loss'].mul(self.hparams.beta) + output['mask_loss'])
+                + output['kl_loss'].mul(self.hparams.beta) + output['mask_loss'].mul(0.001)) #multiply by coeff here
         
         if self.hparams.bc_task:
             self.log('bc_loss', output['bc_loss'])

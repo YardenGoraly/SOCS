@@ -74,10 +74,11 @@ class SOCSDataset(Dataset):
             decode_inds = all_inds[:, decode_mask].T # /in num_p x 3
         else:
             teacher_masks = item['teacher_masks_seq']
-            scaled_sequence = np.zeros((teacher_masks.shape[0], 1, 128, 128))
-            for i in range(teacher_masks.shape[0]):
-                scaled_sequence[i][0] = cv2.resize(teacher_masks[i][0], dsize=(128, 128), interpolation=cv2.INTER_CUBIC)
-            teacher_masks = scaled_sequence
+            # scaled_sequence = np.zeros((teacher_masks.shape[0], 1, 128, 128))
+            # for i in range(teacher_masks.shape[0]):
+            #     scaled_sequence[i][0] = cv2.resize(teacher_masks[i][0], dsize=(128, 128), interpolation=cv2.INTER_CUBIC)
+            # teacher_masks = scaled_sequence
+            # import pdb; pdb.set_trace()
             obj_ids = np.unique(teacher_masks[0][0])
 
             #TS Pick a random object
@@ -115,10 +116,10 @@ class SOCSDataset(Dataset):
      
 
         #scale student images:
-        scaled_sequence_student = np.zeros((img_seq.shape[0], 128, 128, 3))
-        for i in range(img_seq.shape[0]):
-            scaled_sequence_student[i] = cv2.resize(img_seq[i], dsize=(128, 128), interpolation=cv2.INTER_CUBIC)
-        img_seq = scaled_sequence_student
+        # scaled_sequence_student = np.zeros((img_seq.shape[0], 128, 128, 3))
+        # for i in range(img_seq.shape[0]):
+        #     scaled_sequence_student[i] = cv2.resize(img_seq[i], dsize=(128, 128), interpolation=cv2.INTER_CUBIC)
+        # img_seq = scaled_sequence_student
 
         viewpoint_seq = item['viewpoint_seq']
         # Remove the last row of the transform matrix if it's stored
