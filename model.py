@@ -160,17 +160,17 @@ class SOCS(LightningModule):
 
         # compute mask loss
 
-        most_likely_slot = torch.mode(torch.argmax(per_object_log_weights[:, :, :80].sum(2), dim=1))[0]
-        N = per_object_log_weights.shape[2]
-        ground_truth_mask = torch.zeros_like(per_object_log_weights)
-        ones_array = torch.zeros(1, N)
-        ones_array = ones_array.clone()
-        ones_array[:, 0:N//2] = 1
-        ground_truth_mask = ground_truth_mask.clone()
-        ground_truth_mask[:, most_likely_slot] = ones_array
-        mask_loss = torch.norm(per_object_log_weights[:, :, 0:N//2] - ground_truth_mask[:, :, 0:N//2]) + \
-                    torch.norm(per_object_log_weights[:, most_likely_slot, N//2:] - ground_truth_mask[:, most_likely_slot, N//2:])
-        output['mask_loss'] = mask_loss
+        # most_likely_slot = torch.mode(torch.argmax(per_object_log_weights[:, :, :80].sum(2), dim=1))[0]
+        # N = per_object_log_weights.shape[2]
+        # ground_truth_mask = torch.zeros_like(per_object_log_weights)
+        # ones_array = torch.zeros(1, N)
+        # ones_array = ones_array.clone()
+        # ones_array[:, 0:N//2] = 1
+        # ground_truth_mask = ground_truth_mask.clone()
+        # ground_truth_mask[:, most_likely_slot] = ones_array
+        # mask_loss = torch.norm(per_object_log_weights[:, :, 0:N//2] - ground_truth_mask[:, :, 0:N//2]) + \
+        #             torch.norm(per_object_log_weights[:, most_likely_slot, N//2:] - ground_truth_mask[:, most_likely_slot, N//2:])
+        # output['mask_loss'] = mask_loss
 
         # below is for reconstruction loss
         per_object_pixel_log_likelihoods = per_object_pixel_distributions.log_prob(ground_truth_rgb) # \in B x K x N x M x 3
