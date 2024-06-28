@@ -61,7 +61,7 @@ class SOCSDataset(Dataset):
 
         num_frames = self.seq_len*len(self.camera_choice)
         all_inds = np.array(np.meshgrid(range(num_frames), range(self.img_dim_hw[0]), range(self.img_dim_hw[1]), indexing='ij')) #SAM put this in model.py for choosing the pixel to decode
-        if self.decode_pixel_downsample_factor == 1: 
+        if self.decode_pixel_downsample_factor == 1 or True: 
             random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
             decode_pixel_h_inds = slice(random_h_offset, self.img_dim_hw[0], self.decode_pixel_downsample_factor)
             random_w_offset = np.random.randint(self.decode_pixel_downsample_factor)
@@ -74,14 +74,9 @@ class SOCSDataset(Dataset):
             decode_inds = all_inds[:, decode_mask].T # /in num_p x 3
         else:
             teacher_masks = item['teacher_masks_seq']
-            # scaled_sequence = np.zeros((teacher_masks.shape[0], 1, 128, 128))
-            # for i in range(teacher_masks.shape[0]):
-            #     scaled_sequence[i][0] = cv2.resize(teacher_masks[i][0], dsize=(128, 128), interpolation=cv2.INTER_CUBIC)
-            # teacher_masks = scaled_sequence
-            # import pdb; pdb.set_trace()
             obj_ids = np.unique(teacher_masks[0][0])
 
-            #TS Pick a random object
+            #TS: Pick a random object
             obj_id = 0
             if int(max(obj_ids)) != 0:
                 obj_id = np.random.choice(int(max(obj_ids))) + 1
@@ -113,13 +108,6 @@ class SOCSDataset(Dataset):
             decode_inds = np.concatenate((decode_inds_object, decode_inds_not_in_object))
 
         img_seq = item['img_seq']
-     
-
-        #scale student images:
-        # scaled_sequence_student = np.zeros((img_seq.shape[0], 128, 128, 3))
-        # for i in range(img_seq.shape[0]):
-        #     scaled_sequence_student[i] = cv2.resize(img_seq[i], dsize=(128, 128), interpolation=cv2.INTER_CUBIC)
-        # img_seq = scaled_sequence_student
 
         viewpoint_seq = item['viewpoint_seq']
         # Remove the last row of the transform matrix if it's stored
@@ -200,7 +188,6 @@ class LocalDataset(SOCSDataset):
                 teacher_masks_seq = np.expand_dims(data['teacher_masks'], axis=1)
             else:
                 teacher_masks_seq = None
-            # print('here', np.unique(teacher_masks_seq[0][0]))
 
             loaded_data = dict(img_seq=img_seq,
                                viewpoint_seq=viewpoint_seq,
@@ -387,6 +374,7 @@ if __name__ == '__main__':
                       logger=logger, 
                       max_epochs=args.num_epochs,
                       precision=16,
-                      callbacks=[recent_checkpoint_callback, historical_checkpoint_callback])
+                      callbacks=[recent_checkpoint_callback, historical_checkpoint_callback],
+                      profiler='simple')
     
     trainer.fit(model, train_dataloader, ckpt_path=args.checkpoint_path)

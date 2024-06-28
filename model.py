@@ -154,16 +154,13 @@ class SOCS(LightningModule):
         per_mode_log_weights = nn.functional.log_softmax(x[..., 3*self.hparams.num_gaussian_heads : -1], -1) # \in B x K x N x M
         per_object_log_weights = nn.functional.log_softmax(x[..., -1], 1) # \in B x K x N
 
-        # TS: here have a function that matches the teacher object with its most likely slot
-        most_likely_slot = torch.mode(torch.argmax(per_object_log_weights[:, :, :80].sum(2), dim=1))[0] #TODO: do I need to only choose the first half of the queries?
-        # TS: at this point we have the alphas for both types of queries
-
         # Independent gaussians for M values of R, M values of G, M values of B
         per_object_pixel_distributions = Normal(per_object_preds, self.hparams.sigma_x)
         ground_truth_rgb = data['ground_truth_rgb'].unsqueeze(1).unsqueeze(3) # \in B x 1 x N x 1 x 3
 
-        # TS: here we obtain teacher ground truth 
-               # TS: here we can create teacher ground truth in slot representation (bottom right of diagram)
+        # compute mask loss
+
+        most_likely_slot = torch.mode(torch.argmax(per_object_log_weights[:, :, :80].sum(2), dim=1))[0]
         N = per_object_log_weights.shape[2]
         ground_truth_mask = torch.zeros_like(per_object_log_weights)
         ones_array = torch.zeros(1, N)
@@ -171,11 +168,9 @@ class SOCS(LightningModule):
         ones_array[:, 0:N//2] = 1
         ground_truth_mask = ground_truth_mask.clone()
         ground_truth_mask[:, most_likely_slot] = ones_array
-        # print('here', ground_truth_mask.shape)
-        # import pdb; pdb.set_trace()
         mask_loss = torch.norm(per_object_log_weights[:, :, 0:N//2] - ground_truth_mask[:, :, 0:N//2]) + \
                     torch.norm(per_object_log_weights[:, most_likely_slot, N//2:] - ground_truth_mask[:, most_likely_slot, N//2:])
-        output['mask_loss'] = mask_loss #add coefficient hyperparameter and tune
+        output['mask_loss'] = mask_loss
 
         # below is for reconstruction loss
         per_object_pixel_log_likelihoods = per_object_pixel_distributions.log_prob(ground_truth_rgb) # \in B x K x N x M x 3
@@ -217,9 +212,11 @@ class SOCS(LightningModule):
         output = self(batch)
         self.log('reconstruction_loss', output['reconstruction_loss'])
         self.log('distribution_loss', output['kl_loss'])
-        self.log('mask_loss', output['mask_loss'])
+        # self.log('mask_loss', output['mask_loss'])
         loss = (output['reconstruction_loss']
-                + output['kl_loss'].mul(self.hparams.beta) + output['mask_loss'].mul(0.001)) #multiply by coeff here
+                + output['kl_loss'].mul(self.hparams.beta)
+                # + output['mask_loss'].mul(0.001)
+                )
         
         if self.hparams.bc_task:
             self.log('bc_loss', output['bc_loss'])
