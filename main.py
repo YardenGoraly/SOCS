@@ -61,7 +61,7 @@ class SOCSDataset(Dataset):
 
         num_frames = self.seq_len*len(self.camera_choice)
         all_inds = np.array(np.meshgrid(range(num_frames), range(self.img_dim_hw[0]), range(self.img_dim_hw[1]), indexing='ij')) #SAM put this in model.py for choosing the pixel to decode
-        if self.decode_pixel_downsample_factor == 1 or True: 
+        if self.decode_pixel_downsample_factor == 1: 
             random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
             decode_pixel_h_inds = slice(random_h_offset, self.img_dim_hw[0], self.decode_pixel_downsample_factor)
             random_w_offset = np.random.randint(self.decode_pixel_downsample_factor)
@@ -72,6 +72,7 @@ class SOCSDataset(Dataset):
             decode_mask[:, decode_pixel_h_inds, decode_pixel_w_inds] = True
 
             decode_inds = all_inds[:, decode_mask].T # /in num_p x 3
+            # import pdb; pdb.set_trace()
         else:
             teacher_masks = item['teacher_masks_seq']
             obj_ids = np.unique(teacher_masks[0][0])
@@ -83,7 +84,7 @@ class SOCSDataset(Dataset):
 
             # TS: create another decode_mask with indices that are in the selected object
             pixel_in_object_inds = np.where(teacher_masks[0][0] == obj_id)
-            random_inds_in_object = np.random.choice(pixel_in_object_inds[0].shape[0], size=10, replace=False)
+            random_inds_in_object = np.random.choice(pixel_in_object_inds[0].shape[0], size=32, replace=False)
             inds_in_object_x = pixel_in_object_inds[0][random_inds_in_object]
             inds_in_object_y = pixel_in_object_inds[1][random_inds_in_object]
             decode_mask_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
@@ -92,10 +93,10 @@ class SOCSDataset(Dataset):
             # TS: create decode_mask with indices that are not in selected object
             if obj_id != 0:
                 pixel_not_in_object_inds = np.where(teacher_masks[0][0] != obj_id)
-                random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=10, replace=False)
+                random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=32, replace=False)
             else:
                 pixel_not_in_object_inds = np.where(decode_mask_object[0] != True)
-                random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=10, replace=False)
+                random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=32, replace=False)
             inds_not_in_object_x = pixel_not_in_object_inds[0][random_inds_not_in_object]
             inds_not_in_object_y = pixel_not_in_object_inds[1][random_inds_not_in_object]
             decode_mask_not_in_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
@@ -106,7 +107,9 @@ class SOCSDataset(Dataset):
             decode_inds_not_in_object = all_inds[:, decode_mask_not_in_object].T
 
             decode_inds = np.concatenate((decode_inds_object, decode_inds_not_in_object))
+            # import pdb; pdb.set_trace()
 
+        # img_seq = np.concatenate((item['img_seq'], item['img_seq']))
         img_seq = item['img_seq']
 
         viewpoint_seq = item['viewpoint_seq']
@@ -135,6 +138,8 @@ class SOCSDataset(Dataset):
             base_decoder_queries[:,3] = np.ones(decode_inds.shape[0]) * camera_inds
 
         decoder_queries = fourier_embeddings(base_decoder_queries, self.num_fourier_bands, self.fourier_sampling_rate)
+        # decoder_queries = fourier_embeddings(base_decoder_queries, 0, self.fourier_sampling_rate) #TODO: try with this
+        # import pdb; pdb.set_trace()
 
         # Prepare the chunk labels for the first transformer
         base_patch_embeddings = np.zeros((num_frames, self.spatial_patch_hw[0], self.spatial_patch_hw[1], 3 + viewpoint_size))
@@ -169,7 +174,6 @@ class SOCSDataset(Dataset):
         if 'bc_mask' in item:
             data['bc_mask'] = item['bc_mask']
 
-        # print('here', data['ground_truth_rgb'].shape)
         return (data, decode_mask)
 
 class LocalDataset(SOCSDataset):
