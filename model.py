@@ -144,7 +144,7 @@ class SOCS(LightningModule):
         if eval:
             object_latents = object_latent_mean
         else:
-            object_latent_var = nn.functional.softplus(object_latent_pars[..., self.hparams.embed_dim:]) + 0.01
+            object_latent_var = nn.functional.softplus(object_latent_pars[..., self.hparams.embed_dim:] + 0.01)
             # Sample object latents from gaussian distribution
             object_latent_distribution = Normal(object_latent_mean, object_latent_var)
             object_latents = object_latent_distribution.rsample()
