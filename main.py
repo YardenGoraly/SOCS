@@ -12,6 +12,7 @@ from torch.utils.data import Dataset, DataLoader
 
 from model import SOCS
 from util import fourier_embeddings
+import math
 
 import matplotlib.pyplot as plt
 
@@ -63,7 +64,7 @@ class SOCSDataset(Dataset):
 
         num_frames = self.seq_len*len(self.camera_choice)
         all_inds = np.array(np.meshgrid(range(num_frames), range(self.img_dim_hw[0]), range(self.img_dim_hw[1]), indexing='ij')) #SAM put this in model.py for choosing the pixel to decode
-        if self.decode_pixel_downsample_factor == 1: 
+        if self.decode_pixel_downsample_factor == 1 or True: 
             random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
             decode_pixel_h_inds = slice(random_h_offset, self.img_dim_hw[0], self.decode_pixel_downsample_factor)
             random_w_offset = np.random.randint(self.decode_pixel_downsample_factor)
@@ -85,19 +86,26 @@ class SOCSDataset(Dataset):
                 obj_id = np.random.choice(int(max(obj_ids))) + 1
 
             # TS: create another decode_mask with indices that are in the selected object
-            num_pixels_obj = 4
+            desired_num_pixels = 800
+            pixels_used = []
+            # num_pixels_obj = 32
             num_extra_to_sample = 0
             decode_mask_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
             for i in range(8):
                 pixel_in_object_inds = np.where(teacher_masks[i][0] == obj_id) # tuple with each arrays being coordinates of an object
+                total_num_pixels_in_object = len(pixel_in_object_inds[0])
+                num_pixels_obj = math.ceil(desired_num_pixels * (total_num_pixels_in_object/(self.img_dim_hw[0]*self.img_dim_hw[1])))
+                # import pdb; pdb.set_trace()
+                # print('num pix in obj:', num_pixels_obj)
                 if pixel_in_object_inds[0].shape[0] < num_pixels_obj:
                     num_extra_to_sample += num_pixels_obj - pixel_in_object_inds[0].shape[0]
                     sample_size = pixel_in_object_inds[0].shape[0]
                 else:
                     sample_size = num_pixels_obj
+                pixels_used += [sample_size]
                 if pixel_in_object_inds[0].shape[0] == 0:
                     continue
-                random_inds_in_object = np.random.choice(pixel_in_object_inds[0].shape[0], size=sample_size, replace=False)
+                random_inds_in_object = np.random.choice(pixel_in_object_inds[0].shape[0], size=0, replace=False)
                 subset_inds_in_object_x = pixel_in_object_inds[0][random_inds_in_object]
                 subset_inds_in_object_y = pixel_in_object_inds[1][random_inds_in_object]
                 decode_mask_object[i, subset_inds_in_object_x, subset_inds_in_object_y] = True
@@ -128,34 +136,47 @@ class SOCSDataset(Dataset):
             #         decode_mask_not_in_object[i, subset_inds_not_in_object_x, subset_inds_not_in_object_y] = True
 
             # TS: create decode_mask with indices that are not in selected object
-            num_pixels_not_obj = 64 - 4
+            # num_pixels_not_obj = 32
+            # import pdb; pdb.set_trace()
             decode_mask_not_in_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
             for i in range(8):
-                if i == 7:
-                    sample_size = num_pixels_not_obj + num_extra_to_sample
-                else:
-                    sample_size = num_pixels_not_obj
                 if obj_id != 0:
                     pixel_not_in_object_inds = np.where(teacher_masks[i][0] != obj_id)
+                    # num_pixels_not_obj = desired_num_pixels - pixels_used[i]
+                    num_pixels_not_obj = desired_num_pixels
+                    if i == 7:
+                        sample_size = num_pixels_not_obj + num_extra_to_sample
+                    else:
+                        sample_size = num_pixels_not_obj
                     random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=sample_size, replace=False)
                 else:
                     pixel_not_in_object_inds = np.where(decode_mask_object[i] != True)
+                    # num_pixels_not_obj = desired_num_pixels - pixels_used[i]
+                    num_pixels_not_obj = desired_num_pixels
+                    if i == 7:
+                        sample_size = num_pixels_not_obj + num_extra_to_sample
+                    else:
+                        sample_size = num_pixels_not_obj
                     random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=sample_size, replace=False)
+                # print('num pix not in obj:', num_pixels_not_obj)
                 subset_inds_not_in_object_x = pixel_not_in_object_inds[0][random_inds_not_in_object]
                 subset_inds_not_in_object_y = pixel_not_in_object_inds[1][random_inds_not_in_object]
                 decode_mask_not_in_object[i, subset_inds_not_in_object_x, subset_inds_not_in_object_y] = True
 
             decode_mask = decode_mask_object + decode_mask_not_in_object
 
+            # import pdb; pdb.set_trace()
             plt.title('Matrix Visualization')
             for i in range(8):
-                plt.imsave(f'plots/matrix_visualization_{i + 8}.png', decode_mask[i])
+                plt.imsave(f'plots/decode_mask_{i}.png', decode_mask[i])
+                plt.imsave(f'plots/teacher_mask_{i}.png', teacher_masks[i][0])
+                plt.imsave(f'plots/img_seq_{i}.png', item['img_seq'][i])
 
             decode_inds_object = all_inds[:, decode_mask_object].T
             decode_inds_not_in_object = all_inds[:, decode_mask_not_in_object].T
 
             decode_inds = np.concatenate((decode_inds_object, decode_inds_not_in_object))
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
 
         img_seq = item['img_seq']
 
