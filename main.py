@@ -63,8 +63,8 @@ class SOCSDataset(Dataset):
         """
 
         num_frames = self.seq_len*len(self.camera_choice)
-        all_inds = np.array(np.meshgrid(range(num_frames), range(self.img_dim_hw[0]), range(self.img_dim_hw[1]), indexing='ij')) #SAM put this in model.py for choosing the pixel to decode
-        if self.decode_pixel_downsample_factor == 1 or True: 
+        all_inds = np.array(np.meshgrid(range(num_frames), range(self.img_dim_hw[0]), range(self.img_dim_hw[1]), indexing='ij'))
+        if self.decode_pixel_downsample_factor == 1: 
             random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
             decode_pixel_h_inds = slice(random_h_offset, self.img_dim_hw[0], self.decode_pixel_downsample_factor)
             random_w_offset = np.random.randint(self.decode_pixel_downsample_factor)
@@ -86,7 +86,7 @@ class SOCSDataset(Dataset):
                 obj_id = np.random.choice(int(max(obj_ids))) + 1
 
             # TS: create another decode_mask with indices that are in the selected object
-            desired_num_pixels = 800
+            desired_num_pixels = 64
             pixels_used = []
             # num_pixels_obj = 32
             num_extra_to_sample = 0
@@ -110,37 +110,11 @@ class SOCSDataset(Dataset):
                 subset_inds_in_object_y = pixel_in_object_inds[1][random_inds_in_object]
                 decode_mask_object[i, subset_inds_in_object_x, subset_inds_in_object_y] = True
 
-            # pixel_in_object_inds = np.where(teacher_masks[0][0] == obj_id)
-            # random_inds_in_object = np.random.choice(pixel_in_object_inds[0].shape[0], size=32, replace=False)
-            # inds_in_object_x = pixel_in_object_inds[0][random_inds_in_object]
-            # inds_in_object_y = pixel_in_object_inds[1][random_inds_in_object]
-            # decode_mask_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
-            # decode_mask_object[:, inds_in_object_x, inds_in_object_y] = True[]
-
-            # import pdb; pdb.set_trace()
-            
-            # decode_mask_not_in_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
-            # pixel_not_in_object_inds = np.where(decode_mask_object[0] != True)
-            # random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=64, replace=False)
-            # for i in range(8):
-            #     if i == 7:
-            #         sample_size = 56 + num_extra_to_sample
-            #     else:
-            #         sample_size = 56
-            #     if obj_id != 0 and False:
-            #         pixel_not_in_object_inds = np.where(teacher_masks[i][0] != obj_id)
-            #         random_inds_not_in_object = np.random.choice(pixel_not_in_object_inds[0].shape[0], size=sample_size, replace=False)
-            #     else:
-            #         subset_inds_not_in_object_x = pixel_not_in_object_inds[0][random_inds_not_in_object]
-            #         subset_inds_not_in_object_y = pixel_not_in_object_inds[1][random_inds_not_in_object]
-            #         decode_mask_not_in_object[i, subset_inds_not_in_object_x, subset_inds_not_in_object_y] = True
-
             # TS: create decode_mask with indices that are not in selected object
-            # num_pixels_not_obj = 32
-            # import pdb; pdb.set_trace()
+            # num_pixels_not_obj = 64
             decode_mask_not_in_object = np.zeros((num_frames,) + (teacher_masks.shape[2], teacher_masks.shape[3]), dtype='bool')
             for i in range(8):
-                if obj_id != 0:
+                if obj_id != 0 and False:
                     pixel_not_in_object_inds = np.where(teacher_masks[i][0] != obj_id)
                     # num_pixels_not_obj = desired_num_pixels - pixels_used[i]
                     num_pixels_not_obj = desired_num_pixels
@@ -166,17 +140,30 @@ class SOCSDataset(Dataset):
             decode_mask = decode_mask_object + decode_mask_not_in_object
 
             # import pdb; pdb.set_trace()
-            plt.title('Matrix Visualization')
-            for i in range(8):
-                plt.imsave(f'plots/decode_mask_{i}.png', decode_mask[i])
-                plt.imsave(f'plots/teacher_mask_{i}.png', teacher_masks[i][0])
-                plt.imsave(f'plots/img_seq_{i}.png', item['img_seq'][i])
+            # plt.title('Matrix Visualization')
+            # for i in range(8):
+            #     plt.imsave(f'plots/decode_mask_{i}.png', decode_mask[i])
+                # plt.imsave(f'plots/teacher_mask_{i}.png', teacher_masks[i][0])
+                # plt.imsave(f'plots/img_seq_{i}.png', item['img_seq'][i])
+
+            #segregates the in-object pixels and the out-of-object pixels
+            # print('here1')
+            teacher_masks = teacher_masks.squeeze(1)
+            teacher_mask_boolean = teacher_masks == obj_id #true if pixel is obj_id, false otherwise
+            object_inds = all_inds[:, teacher_mask_boolean].T
 
             decode_inds_object = all_inds[:, decode_mask_object].T
             decode_inds_not_in_object = all_inds[:, decode_mask_not_in_object].T
 
             decode_inds = np.concatenate((decode_inds_object, decode_inds_not_in_object))
+
             # import pdb; pdb.set_trace()
+            obj_set = set(map(tuple, object_inds))
+            boolean_column = np.array([tuple(row) in obj_set for row in decode_inds])
+            decode_inds_expanded = np.hstack([decode_inds, boolean_column[:, np.newaxis]])
+            decode_inds_new = decode_inds_expanded[np.flip(decode_inds_expanded[:, 3].argsort())]
+            decode_inds = np.delete(decode_inds_new, 3, axis=1)
+
 
         img_seq = item['img_seq']
 
@@ -223,6 +210,7 @@ class SOCSDataset(Dataset):
                     base_patch_embeddings[i,j,k] = np.array([time_offset, patch_y_offset, patch_x_offset, *view_offset])
 
         patch_positional_embeddings = fourier_embeddings(base_patch_embeddings, self.num_fourier_bands, self.fourier_sampling_rate)
+        # import pdb; pdb.set_trace()
         data = dict(
             img_seq = img_seq.astype('float32'),
             decode_dims = np.array([num_frames, 
