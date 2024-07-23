@@ -136,8 +136,14 @@ class SOCS(LightningModule):
     def decode_latents(self, data, slot_tokens, eval=False):
         output = {}
         decoder_queries = data['decoder_queries'] # \in B x N x S
+
+        # old_decoder_queries = decoder_queries[:, :, :]
+        # for b in range(decoder_queries.shape[0]):
+        #     row_indices = torch.randperm(decoder_queries[b].size(0))
+        #     decoder_queries_shuffled = decoder_queries[b][row_indices, :]
+        #     decoder_queries[b] = decoder_queries_shuffled
+
         object_latent_pars = self.latent_decoder(slot_tokens)
-        # object_latent_pars = torch.nn.functional.normalize(object_latent_pars)
         object_latent_mean = object_latent_pars[..., :self.hparams.embed_dim] # \in B x K x E
         # import pdb; pdb.set_trace()
 
@@ -161,6 +167,15 @@ class SOCS(LightningModule):
         ground_truth_rgb = data['ground_truth_rgb'].unsqueeze(1).unsqueeze(3) # \in B x 1 x N x 1 x 3
 
         # compute mask loss
+        in_object_array = data['in_object_array']
+        num_in_obj = torch.sum(in_object_array).item()
+        expanded_in_object_array = in_object_array.unsqueeze(1).expand(-1, 16, -1)
+        per_object_log_weights_with_bool = torch.stack((per_object_log_weights, expanded_in_object_array), dim=-1) 
+        # import pdb; pdb.set_trace()
+        sorted_values, sorted_indices = torch.sort(per_object_log_weights_with_bool[..., 1], dim=-1, descending=True)
+        per_object_log_weights_sorted = per_object_log_weights_with_bool[torch.arange(per_object_log_weights_with_bool.size(0))[:, None, None],
+             torch.arange(per_object_log_weights_with_bool.size(1))[None, :, None],
+             sorted_indices]
 
         most_likely_slot = torch.mode(torch.argmax(per_object_log_weights[:, :, :80].sum(2), dim=1))[0]
         N = per_object_log_weights.shape[2]
@@ -174,7 +189,8 @@ class SOCS(LightningModule):
                     torch.norm(per_object_log_weights[:, most_likely_slot, N//2:] - ground_truth_mask[:, most_likely_slot, N//2:])
         output['mask_loss'] = mask_loss
 
-        # below is for reconstruction loss
+        # below is for reconstruction los
+
         per_object_pixel_log_likelihoods = per_object_pixel_distributions.log_prob(ground_truth_rgb) # \in B x K x N x M x 3
         # Sum across RGB because we assume the probabilities of each channel are independent, so log(P(R,G,B)) = log(P(R)P(G)P(B)) = log(P(R)) + log(P(G)) + log(P(B))
         per_object_pixel_log_likelihoods = per_object_pixel_log_likelihoods.sum(-1) # \in B x K x N x M
@@ -186,6 +202,7 @@ class SOCS(LightningModule):
         # If using semantic segmentation to mask out the background for the reconstruction loss, do that here
         reconstruction_loss = -(weighted_mixture_log_likelihood).mean()
         output['reconstruction_loss'] = reconstruction_loss
+        # import pdb; pdb.set_trace()
 
         if self.hparams.bc_task and 'bc_waypoints' in data:
             task_tokens = self.task_transformer(slot_tokens.swapaxes(0, 1)) # \in K x B x E

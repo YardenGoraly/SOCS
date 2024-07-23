@@ -160,10 +160,9 @@ class SOCSDataset(Dataset):
             # import pdb; pdb.set_trace()
             obj_set = set(map(tuple, object_inds))
             boolean_column = np.array([tuple(row) in obj_set for row in decode_inds])
-            decode_inds_expanded = np.hstack([decode_inds, boolean_column[:, np.newaxis]])
-            decode_inds_new = decode_inds_expanded[np.flip(decode_inds_expanded[:, 3].argsort())]
-            decode_inds = np.delete(decode_inds_new, 3, axis=1)
-
+            # decode_inds_expanded = np.hstack([decode_inds, boolean_column[:, np.newaxis]])
+            # decode_inds_new = decode_inds_expanded[np.flip(decode_inds_expanded[:, 3].argsort())]
+            # decode_inds = np.delete(decode_inds_new, 3, axis=1)
 
         img_seq = item['img_seq']
 
@@ -219,6 +218,7 @@ class SOCSDataset(Dataset):
             ground_truth_rgb = img_seq[decode_mask],
             patch_positional_embeddings = patch_positional_embeddings.astype('float32'),
             decoder_queries = decoder_queries.astype('float32'),
+            in_object_array = boolean_column
         )
 
         if 'bc_waypoints' in item:
