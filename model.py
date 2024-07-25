@@ -168,7 +168,7 @@ class SOCS(LightningModule):
 
         # compute mask loss
         in_object_array = data['in_object_array']
-        num_in_obj = torch.sum(in_object_array).item()
+        num_in_obj = torch.sum(in_object_array, dim=1)
         expanded_in_object_array = in_object_array.unsqueeze(1).expand(-1, 16, -1)
         per_object_log_weights_with_bool = torch.stack((per_object_log_weights, expanded_in_object_array), dim=-1) 
         # import pdb; pdb.set_trace()
@@ -176,17 +176,24 @@ class SOCS(LightningModule):
         per_object_log_weights_sorted = per_object_log_weights_with_bool[torch.arange(per_object_log_weights_with_bool.size(0))[:, None, None],
              torch.arange(per_object_log_weights_with_bool.size(1))[None, :, None],
              sorted_indices]
+        per_object_log_weights_sorted = per_object_log_weights_sorted[..., :1].squeeze(3)
 
-        most_likely_slot = torch.mode(torch.argmax(per_object_log_weights[:, :, :80].sum(2), dim=1))[0]
+        # import pdb; pdb.set_trace()
+        most_likely_slots = [torch.argmax(per_object_log_weights_sorted[i, :, :num_in_obj[i]].sum(1)).item() for i in range(len(num_in_obj))]
+        # import pdb; pdb.set_trace()
+        # most_likely_slot = torch.argmax(per_object_log_weights[:, :, :80].sum(2), dim=1)
         N = per_object_log_weights.shape[2]
         ground_truth_mask = torch.zeros_like(per_object_log_weights)
-        ones_array = torch.zeros(1, N)
-        ones_array = ones_array.clone()
-        ones_array[:, 0:N//2] = 1
-        ground_truth_mask = ground_truth_mask.clone()
-        ground_truth_mask[:, most_likely_slot] = ones_array
-        mask_loss = torch.norm(per_object_log_weights[:, :, 0:N//2] - ground_truth_mask[:, :, 0:N//2]) + \
-                    torch.norm(per_object_log_weights[:, most_likely_slot, N//2:] - ground_truth_mask[:, most_likely_slot, N//2:])
+        mask_loss = 0
+        for i in range(per_object_log_weights.shape[0]):
+            num_pix_in_obj = num_in_obj[i]
+            ones_array = torch.zeros(1, N)
+            ones_array = ones_array.clone()
+            ones_array[:, 0:num_pix_in_obj] = 1
+            ground_truth_mask = ground_truth_mask.clone()
+            ground_truth_mask[i, most_likely_slots[i]] = ones_array
+            mask_loss += torch.norm(per_object_log_weights[i, :, 0:num_pix_in_obj] - ground_truth_mask[i, :, :num_pix_in_obj]) + \
+                         torch.norm(per_object_log_weights[i, most_likely_slots[i], num_pix_in_obj:] - ground_truth_mask[i, most_likely_slots[i], num_pix_in_obj:])
         output['mask_loss'] = mask_loss
 
         # below is for reconstruction los
@@ -202,7 +209,6 @@ class SOCS(LightningModule):
         # If using semantic segmentation to mask out the background for the reconstruction loss, do that here
         reconstruction_loss = -(weighted_mixture_log_likelihood).mean()
         output['reconstruction_loss'] = reconstruction_loss
-        # import pdb; pdb.set_trace()
 
         if self.hparams.bc_task and 'bc_waypoints' in data:
             task_tokens = self.task_transformer(slot_tokens.swapaxes(0, 1)) # \in K x B x E
@@ -231,10 +237,10 @@ class SOCS(LightningModule):
         output = self(batch)
         self.log('reconstruction_loss', output['reconstruction_loss'])
         self.log('distribution_loss', output['kl_loss'])
-        # self.log('mask_loss', output['mask_loss'])
+        self.log('mask_loss', output['mask_loss'])
         loss = (output['reconstruction_loss']
                 + output['kl_loss'].mul(self.hparams.beta)
-                # + output['mask_loss'].mul(0.001)
+                + output['mask_loss'].mul(0.001)
                 )
         
         if self.hparams.bc_task:
