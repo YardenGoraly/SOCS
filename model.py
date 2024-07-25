@@ -167,25 +167,25 @@ class SOCS(LightningModule):
         ground_truth_rgb = data['ground_truth_rgb'].unsqueeze(1).unsqueeze(3) # \in B x 1 x N x 1 x 3
 
         # compute mask loss
-        in_object_array = data['in_object_array']
-        num_in_obj = torch.sum(in_object_array, dim=1)
-        expanded_in_object_array = in_object_array.unsqueeze(1).expand(-1, 16, -1)
-        per_object_log_weights_with_bool = torch.stack((per_object_log_weights, expanded_in_object_array), dim=-1) 
-        # import pdb; pdb.set_trace()
-        sorted_values, sorted_indices = torch.sort(per_object_log_weights_with_bool[..., 1], dim=-1, descending=True)
+        # sort per_object_log_weights using boolean array of whether pixel is in object or not
+        import pdb; pdb.set_trace()
+        in_object_array = data['in_object_array'] # \in B x N
+        num_in_obj = torch.sum(in_object_array, dim=1) # \in B
+        expanded_in_object_array = in_object_array.unsqueeze(1).expand(-1, 16, -1) # \in B x K x N
+        per_object_log_weights_with_bool = torch.stack((per_object_log_weights, expanded_in_object_array), dim=-1) # \in B x K x N x 2 
+        sorted_values, sorted_indices = torch.sort(per_object_log_weights_with_bool[..., 1], dim=-1, descending=True) # \in B x K x N
         per_object_log_weights_sorted = per_object_log_weights_with_bool[torch.arange(per_object_log_weights_with_bool.size(0))[:, None, None],
              torch.arange(per_object_log_weights_with_bool.size(1))[None, :, None],
-             sorted_indices]
-        per_object_log_weights_sorted = per_object_log_weights_sorted[..., :1].squeeze(3)
+             sorted_indices]  # \in B x K x N x 2
+        per_object_log_weights_sorted = per_object_log_weights_sorted[..., :1].squeeze(3) # \in B x K x N
 
-        # import pdb; pdb.set_trace()
-        most_likely_slots = [torch.argmax(per_object_log_weights_sorted[i, :, :num_in_obj[i]].sum(1)).item() for i in range(len(num_in_obj))]
-        # import pdb; pdb.set_trace()
-        # most_likely_slot = torch.argmax(per_object_log_weights[:, :, :80].sum(2), dim=1)
+        
+        most_likely_slots = [torch.argmax(per_object_log_weights_sorted[i, :, :num_in_obj[i]].sum(1)).item() for i in range(len(num_in_obj))] # list of length B
         N = per_object_log_weights.shape[2]
         ground_truth_mask = torch.zeros_like(per_object_log_weights)
         mask_loss = 0
         for i in range(per_object_log_weights.shape[0]):
+            # import pdb; pdb.set_trace()
             num_pix_in_obj = num_in_obj[i]
             ones_array = torch.zeros(1, N)
             ones_array = ones_array.clone()
