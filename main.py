@@ -64,6 +64,7 @@ class SOCSDataset(Dataset):
 
         num_frames = self.seq_len*len(self.camera_choice)
         all_inds = np.array(np.meshgrid(range(num_frames), range(self.img_dim_hw[0]), range(self.img_dim_hw[1]), indexing='ij'))
+        boolean_column = np.zeros((512))
         if self.decode_pixel_downsample_factor == 1: 
             random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
             decode_pixel_h_inds = slice(random_h_offset, self.img_dim_hw[0], self.decode_pixel_downsample_factor)
