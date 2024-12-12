@@ -172,7 +172,7 @@ class SOCS(LightningModule):
             per_object_log_weights_sorted = torch.gather(per_object_log_weights, 2, indices.long())
 
             num_in_obj = torch.sum(in_object_array, dim=1)
-            B = len(num_in_obj)
+            B = in_object_array.shape[0] #batch size
             most_likely_slots = [torch.argmax(per_object_log_weights_sorted[i, :, :num_in_obj[i]].sum(1)).item() for i in range(B)] # list of length B
             N = per_object_log_weights.shape[2]
             ground_truth_mask = torch.zeros_like(per_object_log_weights)
@@ -182,9 +182,9 @@ class SOCS(LightningModule):
                 ones_array = torch.zeros(1, N)
                 ones_array[:, :num_pix_in_obj] = 1
                 ground_truth_mask[i, most_likely_slots[i]] = ones_array
-                per_object_weights = torch.exp(per_object_log_weights)
-                mask_loss += torch.norm(per_object_weights[i, :, :num_pix_in_obj] - ground_truth_mask[i, :, :num_pix_in_obj]) + \
-                            torch.norm(per_object_weights[i, most_likely_slots[i], num_pix_in_obj:] - ground_truth_mask[i, most_likely_slots[i], num_pix_in_obj:])
+                per_object_weights_sorted = torch.exp(per_object_log_weights_sorted)
+                mask_loss += torch.norm(per_object_weights_sorted[i, :, :num_pix_in_obj] - ground_truth_mask[i, :, :num_pix_in_obj]) + \
+                            torch.norm(per_object_weights_sorted[i, most_likely_slots[i], num_pix_in_obj:] - ground_truth_mask[i, most_likely_slots[i], num_pix_in_obj:])
                 # mask_loss_2 = torch.norm(per_object_weights[i, :, :num_pix_in_obj] - 1) + torch.norm(per_object_weights[i, most_likely_slots[i], num_pix_in_obj:])
             output['mask_loss'] = mask_loss
 
@@ -232,7 +232,7 @@ class SOCS(LightningModule):
         self.log('mask_loss', output['mask_loss'])
         loss = (output['reconstruction_loss']
                 + output['kl_loss'].mul(self.hparams.beta)
-                + output['mask_loss'].mul(0.001))
+                + output['mask_loss'].mul(0.01))
         
         if self.hparams.bc_task:
             self.log('bc_loss', output['bc_loss'])
