@@ -10,6 +10,7 @@ import yaml
 from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from torch.distributions.normal import Normal
 
 from main import InferenceDataset
 from model import SOCS
@@ -106,6 +107,25 @@ def plot_seg_sequence(ckpt, batch, results, timepts, cam=1):
     plt.tight_layout(pad=0, h_pad=0.5)
     return fig
 
+def give_latents_sd(results):
+    """
+    results: list of results, len: sequences, containing batch results
+    """
+    stacked_latents = np.zeros(((len(results),) + results[0]['latents'][0].cpu().numpy().shape))
+    for i in range(len(results)):
+        stacked_latents[i] = results[i]['latents'][0].cpu().numpy()
+    means = torch.from_numpy(np.mean(stacked_latents, axis=1)).cuda()
+    standard_deviations = torch.from_numpy(np.std(stacked_latents, axis=1)).cuda()
+
+    kl_prior = Normal(torch.zeros(32).cuda(), torch.ones(32).cuda())
+
+    latent_dist = Normal(means, standard_deviations)
+    kl_div = torch.distributions.kl_divergence(latent_dist, kl_prior)
+    print('stds', standard_deviations)
+    print('argmax kl and std:', torch.argmax(kl_div, axis=1), torch.argmax(standard_deviations, axis=1))
+
+    return standard_deviations
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('log_root', help='Path to log directory or specific checkpoint')
@@ -118,7 +138,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_seq_to_plot', type=int, default=1)
     parser.add_argument('--num_train_seq', type=int, default=40000)
     parser.add_argument('--num_val_seq', type=int, default=208)
-    parser.add_argument('--video_format', default='both', choices=['gif', 'mp4', 'both'])
+    parser.add_argument('--video_format', default='both', choices=['gif', 'mp4', 'both', 'none'])
     parser.add_argument('--gpu', type=int, default=None, nargs='+')
     parser.add_argument('--parallel_pix', type=int, default=10000,
         help='Number of pixels to decode in each pass. More takes more memory but requires less passes as a result.')
@@ -126,6 +146,8 @@ if __name__ == '__main__':
     parser.add_argument('--plot_types', 
                         default=['ground_truth_rgb', 'mixture_pred_rgb', 'pred_seg'], 
                         nargs='+', choices=PLOT_CHOICES.keys())
+    parser.add_argument('--string_append', default=None )
+    parser.add_argument('--plot_latent_perturbations', default=False)
     
     args = parser.parse_args()
 
@@ -144,8 +166,8 @@ if __name__ == '__main__':
     ckpt.inference_parallel_pixels = args.parallel_pix
 
     if args.idx is not None:
-        train_indices = args.idx
-        val_indices = args.idx
+        train_indices = np.array(args.idx)
+        val_indices = np.array(args.idx)
     elif args.idx_file is not None:
         with open(args.idx_file, 'r') as f:
             indices = yaml.safe_load(f)
@@ -212,30 +234,56 @@ if __name__ == '__main__':
             trainer = Trainer(gpus=args.gpu, strategy="ddp" if len(args.gpu) > 1 else None, logger=False)
         else:
             trainer = Trainer(accelerator='cpu', logger=False)
-        r = trainer.predict(ckpt, dataloaders=dataloader)
+
+        ckpt.latent_offset = 0
+        if not args.plot_latent_perturbations:
+            r = trainer.predict(ckpt, dataloaders=dataloader)
+        else:
+            r = []
+            for i in range(5):
+                ckpt.latent_offset = i
+                r += trainer.predict(ckpt, dataloaders=dataloader)
 
         results = {key: [] for key in result_categories}
         all_plots = []
+
+        latent_std = give_latents_sd(r)
+
         for (i, batch_results) in tqdm(enumerate(r)):
-            batch = dataset.__getitem__(i)
+            if args.plot_latent_perturbations:
+                batch = dataset.__getitem__(0)
+            else:
+                batch = dataset.__getitem__(i)
             plots = plot_frame_sequence_from_single_batch(ckpt, batch, batch_results, plot_types)
             for key in result_categories:
                 if key in batch_results:
                     results[key].append(batch_results[key])
-            if i < args.num_seq_to_plot:
-                all_plots.append(plots)
+            # if i < args.num_seq_to_plot:
+            all_plots.append(plots)
 
         print(f'Results on {split} dataset:')
         for (key, val) in results.items():
             print(f'Mean {key}: {np.nanmean(val)}, std: {np.nanstd(val)}')
         print('here', log_dir)
         if args.num_seq_to_plot > 0:
+            first_frames = []
+            if args.plot_latent_perturbations:
+                indices = [args.idx, args.idx, args.idx, args.idx, args.idx]
             for (index, frames) in zip(indices, all_plots):
+                first_frames += [frames[0]]
                 if args.video_format == 'both' or args.video_format == 'gif':
-                    imageio.mimwrite(os.path.join(log_dir, f'{split}_{index}_{train_step}.gif'), frames, fps=2)
+                    if args.string_append:
+                        imageio.mimwrite(os.path.join(log_dir, f'{split}_{index}_{train_step}_{args.string_append}.gif'), frames, fps=2)
+                    else:
+                        imageio.mimwrite(os.path.join(log_dir, f'{split}_{index}_{train_step}.gif'), frames, fps=2)
                 if args.video_format == 'both' or args.video_format == 'mp4':
-                    imageio.mimwrite(os.path.join(log_dir, f'{split}_{index}_{train_step}.mp4'), frames, fps=2)
-    
+                    if args.string_append:
+                        imageio.mimwrite(os.path.join(log_dir, f'{split}_{index}_{train_step}_{args.string_append}.mp4'), frames, fps=2)
+                    else:
+                        imageio.mimwrite(os.path.join(log_dir, f'{split}_{index}_{train_step}.mp4'), frames, fps=2)
+            if args.plot_latent_perturbations:
+                imageio.mimwrite(os.path.join(log_dir, f'{split}_{index}_{train_step}_latent_{args.string_append}.gif'), first_frames, fps=2)
+
         return results
     
     overall_results = {'train_step': train_step}
@@ -256,3 +304,4 @@ if __name__ == '__main__':
     print(f'Saving metrics at {metrics_path}')
     with open(metrics_path, 'wb') as f:
         pickle.dump(overall_results, f)
+

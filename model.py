@@ -133,15 +133,27 @@ class SOCS(LightningModule):
         slot_tokens = torch.mean(x, 1) # \in B x K x E
         return slot_tokens
 
-    def decode_latents(self, data, slot_tokens, eval=False):
+    def decode_latents(self, data, slot_tokens, latent_offset, eval=False):
         output = {}
         decoder_queries = data['decoder_queries'] # \in B x N x S
-        # TS: could have a line here for decoder_queries_obj = data['decoder_queries_objects']
+
         object_latent_pars = self.latent_decoder(slot_tokens)
         object_latent_mean = object_latent_pars[..., :self.hparams.embed_dim] # \in B x K x E
 
         if eval:
-            object_latents = object_latent_mean
+            # object_latents = object_latent_mean
+            # import pdb; pdb.set_trace()
+            # object_latents[0, 13, 8] += 3 # 13, 2: changes color 13, 3: sorta duplicates #13, 8 really duplicates # 13, 13 tries to change shape? 13, 15 flaring
+
+            object_latent_var = nn.functional.softplus(object_latent_pars[..., self.hparams.embed_dim:])
+            # object_latent_var[0, 13, 2] += 3
+            object_latent_mean[0, 15, 30] += latent_offset # 0: slot 5 is right object, opacity, 1: size/color, 6: x_pos 14: y_pos? 
+            object_latent_distribution = Normal(object_latent_mean, object_latent_var)
+            object_latents = object_latent_distribution.rsample()
+
+            output['latents'] = object_latents
+
+
         else:
             object_latent_var = nn.functional.softplus(object_latent_pars[..., self.hparams.embed_dim:])
             # Sample object latents from gaussian distribution
@@ -151,6 +163,7 @@ class SOCS(LightningModule):
         # Use queries and object latents to decode the selected pixels for loss calculations
         queries = decoder_queries.unsqueeze(1).tile(1, self.hparams.num_object_slots, 1, 1) # \in B x K x N x S
         x = self.query_decoder(object_latents, queries) # \in B x K x N x (M*4)+1
+
         # TS: we'll have two outputs from the query_decoder depending on which decoder queries we used
         per_object_preds = x[..., :3*self.hparams.num_gaussian_heads].unflatten(-1, (self.hparams.num_gaussian_heads, 3)) # \in B x K x N x M x 3
         # TS: here have a function that matches the teacher object with its most likely slot
@@ -214,9 +227,10 @@ class SOCS(LightningModule):
         return loss
 
     def predict_step(self, batch, batch_idx):
-        return self.inference_and_metrics(batch)
+        latent_offset = getattr(self, 'latent_offset', None)
+        return self.inference_and_metrics(batch, latent_offset)
 
-    def inference_and_metrics(self, batch, batch_ind=0):
+    def inference_and_metrics(self, batch, latent_offset, batch_ind=0):
         num_pix = self.inference_parallel_pixels
         pixel_ind = 0
         (B, F, H, W, _) = batch['img_seq'].shape
@@ -236,11 +250,16 @@ class SOCS(LightningModule):
                 minibatch['bc_waypoints'] = batch['bc_waypoints']
                 minibatch['bc_mask'] = batch['bc_mask']
 
-            mini_output = self.decode_latents(minibatch, slot_tokens, eval=True)
+            mini_output = self.decode_latents(minibatch, slot_tokens, latent_offset, eval=True)
             per_object_preds[:, :, pixel_ind : pixel_ind + num_pix] = mini_output['per_object_preds'].detach()
             per_object_weights[:, :, pixel_ind : pixel_ind + num_pix] = mini_output['per_object_weights'].detach()
+
+            latents = mini_output['latents']
+
             num_pix = min(num_pix, total_num_pix - pixel_ind)
             pixel_ind += num_pix
+
+
 
         preds = self.mixture_preds(per_object_preds, per_object_weights)
         greedy_preds = self.greedy_preds(per_object_preds, per_object_weights)[batch_ind].cpu().detach().numpy()
@@ -255,6 +274,7 @@ class SOCS(LightningModule):
         
         results_dict = dict(
             reconstruction_err = reconstruction_err,
+            latents = latents,
             preds = pred_rgb,
             greedy_preds = greedy_preds,
             per_object_weights = pred_weights_tensor.numpy())
@@ -335,6 +355,7 @@ class SOCS(LightningModule):
         """
         Show the predicted segmentation masks.
         """
+        # import pdb; pdb.set_trace()
         best_obj_ids = np.argmax(per_object_weights, 0).reshape(dims)[idx]
         color_inds = np.mod(best_obj_ids, len(MASK_COLORS))
         mask_img = MASK_COLORS[color_inds.flatten()].reshape(dims[1:] + (3,))
