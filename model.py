@@ -108,7 +108,6 @@ class SOCS(LightningModule):
         positional_embeddings = data['patch_positional_embeddings'] # \in B x T x Y x X x S
         batch_size = x.shape[0]
         num_frame_slots = x.shape[1]
-        # import pdb; pdb.set_trace()
         # Encode the entire sequence of images
         x = self.encoder(x) # \in B x T x U x V x E - S
         x = torch.cat((x, positional_embeddings), -1).flatten(1, 3) # \in B x T*U*V x E
@@ -162,6 +161,33 @@ class SOCS(LightningModule):
         per_object_pixel_distributions = Normal(per_object_preds, self.hparams.sigma_x)
         ground_truth_rgb = data['ground_truth_rgb'].unsqueeze(1).unsqueeze(3) # \in B x 1 x N x 1 x 3
 
+        if 'in_object_array' in data and torch.sum(data['in_object_array']) > 0:
+            # sort per_object_log_weights so that entries in object come before objects outside object
+            in_object_array = data['in_object_array']
+            sorted_values, sorted_indices = torch.sort(in_object_array.long(), axis=1, descending=True)
+            indices = torch.zeros_like(per_object_log_weights)
+            indices[:, ...] = torch.arange(indices.size(0))[:, None, None]
+            indices[..., :, ...] = torch.arange(indices.size(1))[None, :, None]
+            indices[..., :] = sorted_indices.unsqueeze(1)
+            per_object_log_weights_sorted = torch.gather(per_object_log_weights, 2, indices.long())
+
+            num_in_obj = torch.sum(in_object_array, dim=1)
+            B = len(num_in_obj)
+            most_likely_slots = [torch.argmax(per_object_log_weights_sorted[i, :, :num_in_obj[i]].sum(1)).item() for i in range(B)] # list of length B
+            N = per_object_log_weights.shape[2]
+            ground_truth_mask = torch.zeros_like(per_object_log_weights)
+            mask_loss = 0
+            for i in range(B):
+                num_pix_in_obj = num_in_obj[i]
+                ones_array = torch.zeros(1, N)
+                ones_array[:, :num_pix_in_obj] = 1
+                ground_truth_mask[i, most_likely_slots[i]] = ones_array
+                per_object_weights = torch.exp(per_object_log_weights)
+                mask_loss += torch.norm(per_object_weights[i, :, :num_pix_in_obj] - ground_truth_mask[i, :, :num_pix_in_obj]) + \
+                            torch.norm(per_object_weights[i, most_likely_slots[i], num_pix_in_obj:] - ground_truth_mask[i, most_likely_slots[i], num_pix_in_obj:])
+                # mask_loss_2 = torch.norm(per_object_weights[i, :, :num_pix_in_obj] - 1) + torch.norm(per_object_weights[i, most_likely_slots[i], num_pix_in_obj:])
+            output['mask_loss'] = mask_loss
+
         # TS: here we obtain teacher ground truth 
         per_object_pixel_log_likelihoods = per_object_pixel_distributions.log_prob(ground_truth_rgb) # \in B x K x N x M x 3
         # Sum across RGB because we assume the probabilities of each channel are independent, so log(P(R,G,B)) = log(P(R)P(G)P(B)) = log(P(R)) + log(P(G)) + log(P(B))
@@ -203,8 +229,10 @@ class SOCS(LightningModule):
         output = self(batch)
         self.log('reconstruction_loss', output['reconstruction_loss'])
         self.log('distribution_loss', output['kl_loss'])
+        self.log('mask_loss', output['mask_loss'])
         loss = (output['reconstruction_loss']
-                + output['kl_loss'].mul(self.hparams.beta))
+                + output['kl_loss'].mul(self.hparams.beta)
+                + output['mask_loss'].mul(0.001))
         
         if self.hparams.bc_task:
             self.log('bc_loss', output['bc_loss'])
@@ -327,6 +355,7 @@ class SOCS(LightningModule):
         """
         Show the reconstructed RGB image.
         """
+        # import pdb; pdb.set_trace()
         img_arr = preds.reshape(dims +  (3,))[idx]
         img_arr = np.clip(img_arr, 0, 1) * 255
         return img_arr.astype('uint8')

@@ -218,6 +218,7 @@ if __name__ == '__main__':
         all_plots = []
         for (i, batch_results) in tqdm(enumerate(r)):
             batch = dataset.__getitem__(i)
+            # import pdb; pdb.set_trace()
             plots = plot_frame_sequence_from_single_batch(ckpt, batch, batch_results, plot_types)
             for key in result_categories:
                 if key in batch_results:

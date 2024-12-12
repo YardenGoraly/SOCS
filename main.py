@@ -9,6 +9,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.data import Dataset, DataLoader
 import faulthandler
+import matplotlib.pyplot as plt
 
 from model import SOCS
 from util import fourier_embeddings
@@ -58,25 +59,82 @@ class SOCSDataset(Dataset):
         Given a loaded sequence, find the positional embeddings for the transformer and the queries for
         the output decoder.
         """
-        #TS Pick a random object 
-
+        # import pdb; pdb.set_trace()
         num_frames = self.seq_len*len(self.camera_choice)
-        random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
-        decode_pixel_h_inds = slice(random_h_offset, self.img_dim_hw[0], self.decode_pixel_downsample_factor)
-        random_w_offset = np.random.randint(self.decode_pixel_downsample_factor)
-        decode_pixel_w_inds = slice(random_w_offset, self.img_dim_hw[1], self.decode_pixel_downsample_factor)
+        boolean_column = np.zeros((512))
+        all_inds = np.array(np.meshgrid(range(num_frames), range(self.img_dim_hw[0]), range(self.img_dim_hw[1]), indexing='ij'))
+        if self.decode_pixel_downsample_factor == 1: 
+            random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
+            decode_pixel_h_inds = slice(random_h_offset, self.img_dim_hw[0], self.decode_pixel_downsample_factor)
+            random_w_offset = np.random.randint(self.decode_pixel_downsample_factor)
+            decode_pixel_w_inds = slice(random_w_offset, self.img_dim_hw[1], self.decode_pixel_downsample_factor)
 
-        # Mask that determines which of the pixels in the input data will be decoded
-        decode_mask = np.zeros((num_frames,) + self.img_dim_hw, dtype='bool')
-        decode_mask[:, decode_pixel_h_inds, decode_pixel_w_inds] = True
-        # TS: create another decode_mask with indices that are in the selected object
-        #do np.random.choice(pixels_where_pixel==obj_id, replace = False)
-        #do np.random.choice(pixels_where_pixel!=obj_id, replace = False) for the other query (we don't want object pixels in this)
+            # Mask that determines which of the pixels in the input data will be decoded
+            decode_mask = np.zeros((num_frames,) + self.img_dim_hw, dtype='bool')
+            decode_mask[:, decode_pixel_h_inds, decode_pixel_w_inds] = True
 
-        all_inds = np.array(np.meshgrid(range(num_frames), range(self.img_dim_hw[0]), range(self.img_dim_hw[1]), indexing='ij')) #SAM put this in model.py for choosing the pixel to decode
-        # print('all_inds shape', all_inds.shape)
-        decode_inds = all_inds[:, decode_mask].T # /in num_p x 3
-        # print('decode_inds shape', decode_inds.shape)
+            all_inds = np.array(np.meshgrid(range(num_frames), range(self.img_dim_hw[0]), range(self.img_dim_hw[1]), indexing='ij')) #SAM put this in model.py for choosing the pixel to decode
+
+            decode_inds = all_inds[:, decode_mask].T # /in num_p x 3
+        else: 
+            # for SAM
+            # teacher_masks = item['teacher_masks_seq']
+            # obj_ids = np.unique(teacher_masks[0][0])
+
+            # # chooses only one of the objects for the segmentation
+            # ground_truth_masks_raw = item['ground_truth_segmentation'].squeeze(1)
+            # pixels = ground_truth_masks_raw.reshape(-1, ground_truth_masks_raw.shape[-1])
+            # unique_colors = np.unique(pixels, axis=0)
+            # obj_id = np.random.choice(unique_colors.shape[0] - 1) + 1
+            # ground_truth_masks = np.zeros((num_frames, ground_truth_masks_raw.shape[1], ground_truth_masks_raw.shape[2]))
+            # for i in range(ground_truth_masks_raw.shape[0]):
+            #     is_in_object = np.zeros((ground_truth_masks_raw.shape[1], ground_truth_masks_raw.shape[2]))
+            #     for j in range(ground_truth_masks_raw.shape[1]):
+            #         for k in range(ground_truth_masks_raw.shape[2]):
+            #             is_in_object[j][k] = (ground_truth_masks_raw[i][j][k].all() == unique_colors[obj_id].all()) * obj_id
+            #     ground_truth_masks[i] = is_in_object
+
+            ground_truth_masks = item['ground_truth_segmentation']
+            obj_id = int(np.max(ground_truth_masks))
+
+            # for SAM
+            # TS: Pick a random object
+            # obj_id = 0
+            # if int(max(obj_ids)) != 0:
+            #     obj_id = np.random.choice(int(max(obj_ids))) + 1
+
+            decode_mask = np.zeros((num_frames,) + self.img_dim_hw, dtype='bool')
+            desired_num_pixels = 64
+
+            # Create decode_mask of pixels (both in and out object) with desired_num_pixels random pixels
+            for i in range(8):
+                pixel_inds = np.where(decode_mask[i] != True)
+                random_inds = np.random.choice(pixel_inds[0].shape[0], size=desired_num_pixels, replace=False)
+                subset_inds_x = pixel_inds[0][random_inds]
+                subset_inds_y = pixel_inds[1][random_inds]
+                decode_mask[i, subset_inds_x, subset_inds_y] = True
+            decode_mask = decode_mask
+        
+            #for SAM
+            # teacher_masks = teacher_masks.squeeze(1)
+            teacher_masks = ground_truth_masks
+            teacher_mask_boolean = teacher_masks == obj_id #true if pixel is obj_id, false otherwise
+            object_inds = all_inds[:, teacher_mask_boolean].T
+
+            decode_inds = all_inds[:, decode_mask].T
+
+            # creates set of tuples where each tuple is an index inside an object with id obj_id 
+            obj_set = set(map(tuple, object_inds))
+
+            # array where value at index i is 1 if row i in decode_inds is in object, 0 otherwise
+            boolean_column = np.array([tuple(row) in obj_set for row in decode_inds])
+
+            # # mask plotting
+            # plt.title('Matrix Visualization')
+            # for i in range(8):
+            #     plt.imsave(f'plots/decode_mask_{i}.png', decode_mask[i])
+            #     plt.imsave(f'plots/teacher_mask_{i}.png', teacher_masks[i][0])
+            #     plt.imsave(f'plots/img_seq_{i}.png', item['img_seq'][i])
 
         img_seq = item['img_seq']
         viewpoint_seq = item['viewpoint_seq']
@@ -130,6 +188,7 @@ class SOCSDataset(Dataset):
             ground_truth_rgb = img_seq[decode_mask],
             patch_positional_embeddings = patch_positional_embeddings.astype('float32'),
             decoder_queries = decoder_queries.astype('float32'),
+            in_object_array = boolean_column
         )
         # TS: maybe treat decoder_queries separately for random vs object?
 
@@ -152,10 +211,17 @@ class LocalDataset(SOCSDataset):
             viewpoint_seq = data['viewpoint_transform'][:self.seq_len, self.camera_choice]
             viewpoint_seq = viewpoint_seq.reshape((num_frames,) + viewpoint_seq.shape[2:])
             time_seq = data['time'][:self.seq_len].flatten()
+            ground_truth_segmentation = data['segmentation'] 
+            if 'teacher_masks' in data.keys():
+                teacher_masks_seq = np.expand_dims(data['teacher_masks'], axis=1)
+            else:
+                teacher_masks_seq = None
 
             loaded_data = dict(img_seq=img_seq,
+                               ground_truth_segmentation=ground_truth_segmentation,
                                viewpoint_seq=viewpoint_seq,
-                               time_seq=time_seq)
+                               time_seq=time_seq,
+                               teacher_masks_seq=teacher_masks_seq)
             
             # if 'bc_waypoints' in data:
             #     loaded_data['bc_waypoints'] = data['bc_waypoints']
