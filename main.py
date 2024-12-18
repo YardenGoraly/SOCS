@@ -164,6 +164,7 @@ class SOCSDataset(Dataset):
                     base_patch_embeddings[i,j,k] = np.array([time_offset, patch_y_offset, patch_x_offset, *view_offset])
 
         patch_positional_embeddings = fourier_embeddings(base_patch_embeddings, self.num_fourier_bands, self.fourier_sampling_rate)
+        # import pdb; pdb.set_trace()
         data = dict(
             img_seq = img_seq.astype('float32'),
             decode_dims = np.array([num_frames, 
@@ -172,7 +173,8 @@ class SOCSDataset(Dataset):
             ground_truth_rgb = img_seq[decode_mask],
             patch_positional_embeddings = patch_positional_embeddings.astype('float32'),
             decoder_queries = decoder_queries.astype('float32'),
-            in_object_array = boolean_column
+            in_object_array = boolean_column,
+            # instance_mask = item['full_segmentation'],
         )
         # TS: maybe treat decoder_queries separately for random vs object?
 
@@ -196,6 +198,7 @@ class LocalDataset(SOCSDataset):
             viewpoint_seq = viewpoint_seq.reshape((num_frames,) + viewpoint_seq.shape[2:])
             time_seq = data['time'][:self.seq_len].flatten()
             ground_truth_segmentation = data['segmentation'] 
+            # full_segmentation = (data['full_segmentation'].sum(3) > 0).astype(int)
             if 'teacher_masks' in data.keys():
                 teacher_masks_seq = np.expand_dims(data['teacher_masks'], axis=1)
             else:
@@ -205,7 +208,9 @@ class LocalDataset(SOCSDataset):
                                ground_truth_segmentation=ground_truth_segmentation,
                                viewpoint_seq=viewpoint_seq,
                                time_seq=time_seq,
-                               teacher_masks_seq=teacher_masks_seq)
+                               teacher_masks_seq=teacher_masks_seq,
+                            #    full_segmentation=full_segmentation
+                               )
             
             # if 'bc_waypoints' in data:
             #     loaded_data['bc_waypoints'] = data['bc_waypoints']

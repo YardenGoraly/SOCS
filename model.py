@@ -224,8 +224,7 @@ class SOCS(LightningModule):
         return output
 
     def training_step(self, batch, batch_idx):
-        # import pdb; pdb.set_trace()
-        mask_loss_param = np.log(1 + (0.000001 * (batch_idx + self.current_epoch*10000)))
+        mask_loss_param = 0.0001*np.log(1 + (batch_idx + self.current_epoch*10000))
         output = self(batch)
         self.log('reconstruction_loss', output['reconstruction_loss'])
         self.log('distribution_loss', output['kl_loss'])

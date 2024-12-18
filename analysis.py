@@ -118,13 +118,13 @@ if __name__ == '__main__':
     parser.add_argument('--num_seq_to_plot', type=int, default=1)
     parser.add_argument('--num_train_seq', type=int, default=40000)
     parser.add_argument('--num_val_seq', type=int, default=208)
-    parser.add_argument('--video_format', default='both', choices=['gif', 'mp4', 'both'])
+    parser.add_argument('--video_format', default='gif', choices=['gif', 'mp4', 'both'])
     parser.add_argument('--gpu', type=int, default=None, nargs='+')
     parser.add_argument('--parallel_pix', type=int, default=10000,
         help='Number of pixels to decode in each pass. More takes more memory but requires less passes as a result.')
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--plot_types', 
-                        default=['ground_truth_rgb', 'mixture_pred_rgb', 'pred_seg'], 
+                        default=['ground_truth_rgb', 'mixture_pred_rgb', 'pred_seg_foreground'], 
                         nargs='+', choices=PLOT_CHOICES.keys())
     
     args = parser.parse_args()
