@@ -150,12 +150,9 @@ class SOCS(LightningModule):
         # Use queries and object latents to decode the selected pixels for loss calculations
         queries = decoder_queries.unsqueeze(1).tile(1, self.hparams.num_object_slots, 1, 1) # \in B x K x N x S
         x = self.query_decoder(object_latents, queries) # \in B x K x N x (M*4)+1
-        # TS: we'll have two outputs from the query_decoder depending on which decoder queries we used
         per_object_preds = x[..., :3*self.hparams.num_gaussian_heads].unflatten(-1, (self.hparams.num_gaussian_heads, 3)) # \in B x K x N x M x 3
-        # TS: here have a function that matches the teacher object with its most likely slot
         per_mode_log_weights = nn.functional.log_softmax(x[..., 3*self.hparams.num_gaussian_heads : -1], -1) # \in B x K x N x M
         per_object_log_weights = nn.functional.log_softmax(x[..., -1], 1) # \in B x K x N
-        # TS: at this point we have the alphas for both types of queries
 
         # Independent gaussians for M values of R, M values of G, M values of B
         per_object_pixel_distributions = Normal(per_object_preds, self.hparams.sigma_x)
@@ -177,6 +174,7 @@ class SOCS(LightningModule):
             N = per_object_log_weights.shape[2]
             ground_truth_mask = torch.zeros_like(per_object_log_weights)
             mask_loss = 0
+            # import pdb; pdb.set_trace()
             for i in range(B):
                 num_pix_in_obj = num_in_obj[i]
                 ones_array = torch.zeros(1, N)
@@ -185,6 +183,7 @@ class SOCS(LightningModule):
                 per_object_weights_sorted = torch.exp(per_object_log_weights_sorted)
                 mask_loss += torch.norm(per_object_weights_sorted[i, :, :num_pix_in_obj] - ground_truth_mask[i, :, :num_pix_in_obj]) + \
                             torch.norm(per_object_weights_sorted[i, most_likely_slots[i], num_pix_in_obj:] - ground_truth_mask[i, most_likely_slots[i], num_pix_in_obj:])
+                # import pdb; pdb.set_trace()
                 # mask_loss_2 = torch.norm(per_object_weights[i, :, :num_pix_in_obj] - 1) + torch.norm(per_object_weights[i, most_likely_slots[i], num_pix_in_obj:])
             output['mask_loss'] = mask_loss
 
@@ -196,7 +195,6 @@ class SOCS(LightningModule):
         # Then apply logsumexp to add the weighted likelihoods in regular space and then convert back to log space
         weighted_mixture_log_likelihood = torch.logsumexp(per_object_pixel_log_likelihoods + per_mode_log_weights, -1) # \in B x K x N
         weighted_mixture_log_likelihood = torch.logsumexp(weighted_mixture_log_likelihood + per_object_log_weights, 1) # \in B x N
-        # TS: Perform loss calculation
 
         # If using semantic segmentation to mask out the background for the reconstruction loss, do that here
         reconstruction_loss = -(weighted_mixture_log_likelihood).mean()
@@ -226,13 +224,18 @@ class SOCS(LightningModule):
         return output
 
     def training_step(self, batch, batch_idx):
+        # import pdb; pdb.set_trace()
+        mask_loss_param = np.log(1 + (0.000001 * (batch_idx + self.current_epoch*10000)))
         output = self(batch)
         self.log('reconstruction_loss', output['reconstruction_loss'])
         self.log('distribution_loss', output['kl_loss'])
-        self.log('mask_loss', output['mask_loss'])
+        self.log('raw_mask_loss', output['mask_loss'])
+        self.log('mask_loss_param', mask_loss_param)
+        self.log('mask_loss_paramed', output['mask_loss'].mul(mask_loss_param))
         loss = (output['reconstruction_loss']
                 + output['kl_loss'].mul(self.hparams.beta)
-                + output['mask_loss'].mul(0.01))
+                + output['mask_loss'].mul(mask_loss_param)
+                )
         
         if self.hparams.bc_task:
             self.log('bc_loss', output['bc_loss'])

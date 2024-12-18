@@ -83,18 +83,28 @@ class SOCSDataset(Dataset):
             desired_num_pixels = 64
 
             # decode mask has 64 random pixels throughout the image 
-            for i in range(8):
-                pixel_inds = np.where(decode_mask[i] != True)
-                random_inds = np.random.choice(pixel_inds[0].shape[0], size=desired_num_pixels, replace=False)
-                subset_inds_x = pixel_inds[0][random_inds]
-                subset_inds_y = pixel_inds[1][random_inds]
-                decode_mask[i, subset_inds_x, subset_inds_y] = True
-            decode_mask = decode_mask
+            # for i in range(8):
+            #     pixel_inds = np.where(decode_mask[i] != True)
+            #     random_inds = np.random.choice(pixel_inds[0].shape[0], size=desired_num_pixels, replace=False)
+            #     subset_inds_x = pixel_inds[0][random_inds]
+            #     subset_inds_y = pixel_inds[1][random_inds]
+            #     decode_mask[i, subset_inds_x, subset_inds_y] = True
+            # decode_mask = decode_mask
+
+            random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
+            decode_pixel_h_inds = slice(random_h_offset, self.img_dim_hw[0], self.decode_pixel_downsample_factor)
+            random_w_offset = np.random.randint(self.decode_pixel_downsample_factor)
+            decode_pixel_w_inds = slice(random_w_offset, self.img_dim_hw[1], self.decode_pixel_downsample_factor)
+
+            # Mask that determines which of the pixels in the input data will be decoded
+            decode_mask = np.zeros((num_frames,) + self.img_dim_hw, dtype='bool')
+            decode_mask[:, decode_pixel_h_inds, decode_pixel_w_inds] = True
+            decode_inds = all_inds[:, decode_mask].T # /in num_p x 3
         
             teacher_masks = ground_truth_masks
             teacher_mask_boolean = teacher_masks == obj_id #true if pixel is obj_id, false otherwise
             object_inds = all_inds[:, teacher_mask_boolean].T
-            decode_inds = all_inds[:, decode_mask].T
+            # decode_inds = all_inds[:, decode_mask].T
 
             # creates set of tuples where each tuple is an index inside an object 
             obj_set = set(map(tuple, object_inds))
@@ -247,8 +257,6 @@ class InferenceDataset(LocalDataset):
         return item
 
 if __name__ == '__main__':
-    print('here')
-    # torch.autograd.set_detect_anomaly(True)
     parser = argparse.ArgumentParser()
 
     faulthandler.enable()
@@ -341,7 +349,7 @@ if __name__ == '__main__':
                                                 decode_pixel_downsample_factor=args.downsample_factor,
                                                 camera_choice=args.cameras,
                                                 no_viewpoint=args.no_viewpoint), 
-                                    batch_size=batch_size, shuffle=True, num_workers=0)
+                                    batch_size=batch_size, shuffle=True, num_workers=32)
 
     model = SOCS(img_dim_hw=img_dim_hw,
                  embed_dim=args.object_latent_size,
