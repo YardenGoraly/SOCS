@@ -133,7 +133,7 @@ class SOCS(LightningModule):
         slot_tokens = torch.mean(x, 1) # \in B x K x E
         return slot_tokens
 
-    def decode_latents(self, data, slot_tokens, latent_offset, eval=False):
+    def decode_latents(self, data, slot_tokens, latent_offset=None, eval=False):
         output = {}
         decoder_queries = data['decoder_queries'] # \in B x N x S
 
@@ -146,8 +146,7 @@ class SOCS(LightningModule):
             # object_latents[0, 13, 8] += 3 # 13, 2: changes color 13, 3: sorta duplicates #13, 8 really duplicates # 13, 13 tries to change shape? 13, 15 flaring
 
             object_latent_var = nn.functional.softplus(object_latent_pars[..., self.hparams.embed_dim:])
-            # object_latent_var[0, 13, 2] += 3
-            object_latent_mean[0, 15, 30] += latent_offset # 0: slot 5 is right object, opacity, 1: size/color, 6: x_pos 14: y_pos? 
+            object_latent_mean[0, :, 31] += latent_offset # 0: slot 5 is right object, opacity, 1: size/color, 6: x_pos 14: y_pos? 
             object_latent_distribution = Normal(object_latent_mean, object_latent_var)
             object_latents = object_latent_distribution.rsample()
 

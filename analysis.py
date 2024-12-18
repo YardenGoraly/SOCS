@@ -57,7 +57,8 @@ def plot_frame_sequence_from_single_batch(ckpt, batch, results, plot_types, fig_
     for frame in range(seq_len):
         (f, axes) = plt.subplots(num_rows, num_cameras, figsize=fig_width*np.array([1, fig_height_width_ratio]))
         # Make sure axes have 2 dims even in case where only 1 row and/or camera
-        axes = axes.reshape(num_rows, num_cameras)
+        # import pdb; pdb.set_trace()
+        # axes = axes.reshape(num_rows, num_cameras)
         for (row, plot_type) in enumerate(plot_types):
             for cam in range(num_cameras):
                 frame_idx = np.ravel_multi_index((frame, cam), (seq_len, num_cameras))
@@ -76,8 +77,8 @@ def plot_frame_sequence_from_single_batch(ckpt, batch, results, plot_types, fig_
                     im = ckpt.show_object_masks_foreground(obj_weights, foreground_seg, img_dims, idx=frame_idx)
                 elif plot_type == PLOT_CHOICES['pixel_score']:
                     im = ckpt.show_pixel_scores(obj_weights, batch['instance_oh'], img_dims, idx=frame_idx)
-                axes[row, cam].imshow(im)
-                axes[row, cam].set_axis_off()
+                axes.imshow(im)
+                axes.set_axis_off()
 
         plt.tight_layout(pad=0, h_pad=0.5)
         fig_imgs.append(render_fig(f))
@@ -205,7 +206,6 @@ if __name__ == '__main__':
         cameras = [1]
 
     print(ckpt.hparams)
-
     train_data_root = os.path.join(data_root, 'train')
     val_data_root = os.path.join(data_root, 'val')
 
