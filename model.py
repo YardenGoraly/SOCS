@@ -165,8 +165,10 @@ class SOCS(LightningModule):
             indices = torch.zeros_like(per_object_log_weights)
             indices[:, ...] = torch.arange(indices.size(0))[:, None, None]
             indices[..., :, ...] = torch.arange(indices.size(1))[None, :, None]
+            # import pdb; pdb.set_trace()
             indices[..., :] = sorted_indices.unsqueeze(1)
             per_object_log_weights_sorted = torch.gather(per_object_log_weights, 2, indices.long())
+            # import pdb; pdb.set_trace()
 
             num_in_obj = torch.sum(in_object_array, dim=1)
             B = in_object_array.shape[0] #batch size
@@ -181,6 +183,7 @@ class SOCS(LightningModule):
                 ones_array[:, :num_pix_in_obj] = 1
                 ground_truth_mask[i, most_likely_slots[i]] = ones_array
                 per_object_weights_sorted = torch.exp(per_object_log_weights_sorted)
+                # import pdb; pdb.set_trace()
                 mask_loss += torch.norm(per_object_weights_sorted[i, :, :num_pix_in_obj] - ground_truth_mask[i, :, :num_pix_in_obj]) + \
                             torch.norm(per_object_weights_sorted[i, most_likely_slots[i], num_pix_in_obj:] - ground_truth_mask[i, most_likely_slots[i], num_pix_in_obj:])
                 # import pdb; pdb.set_trace()
@@ -233,7 +236,7 @@ class SOCS(LightningModule):
         self.log('mask_loss_paramed', output['mask_loss'].mul(mask_loss_param))
         loss = (output['reconstruction_loss']
                 + output['kl_loss'].mul(self.hparams.beta)
-                + output['mask_loss'].mul(mask_loss_param)
+                # + output['mask_loss'].mul(mask_loss_param)
                 )
         
         if self.hparams.bc_task:

@@ -20,7 +20,7 @@ class SOCSDataset(Dataset):
                  spatial_patch_hw,
                  data_root,
                  num_sequences=1,
-                 decode_pixel_downsample_factor=16,
+                 decode_pixel_downsample_factor=2,
                  img_dim_hw=(0,0),
                  camera_choice=[1],
                  add_instance_seg=False,
@@ -79,46 +79,45 @@ class SOCSDataset(Dataset):
             ground_truth_masks = item['ground_truth_segmentation']
             obj_id = int(np.max(ground_truth_masks))
 
-            decode_mask = np.zeros((num_frames,) + self.img_dim_hw, dtype='bool')
-            desired_num_pixels = 64
+            # Samples strided grid of pixels out of the entire pixel space based on downsample_factor (space between pixels)
+            def create_pixel_mask_uniform(downsample_factor):
+                random_h_offset = np.random.randint(downsample_factor)
+                decode_pixel_h_inds = slice(random_h_offset, self.img_dim_hw[0], downsample_factor)
+                random_w_offset = np.random.randint(downsample_factor)
+                decode_pixel_w_inds = slice(random_w_offset, self.img_dim_hw[1], downsample_factor)
 
-            # decode mask has 64 random pixels throughout the image 
-            # for i in range(8):
-            #     pixel_inds = np.where(decode_mask[i] != True)
-            #     random_inds = np.random.choice(pixel_inds[0].shape[0], size=desired_num_pixels, replace=False)
-            #     subset_inds_x = pixel_inds[0][random_inds]
-            #     subset_inds_y = pixel_inds[1][random_inds]
-            #     decode_mask[i, subset_inds_x, subset_inds_y] = True
-            # decode_mask = decode_mask
-
-            random_h_offset = np.random.randint(self.decode_pixel_downsample_factor)
-            decode_pixel_h_inds = slice(random_h_offset, self.img_dim_hw[0], self.decode_pixel_downsample_factor)
-            random_w_offset = np.random.randint(self.decode_pixel_downsample_factor)
-            decode_pixel_w_inds = slice(random_w_offset, self.img_dim_hw[1], self.decode_pixel_downsample_factor)
-
-            # Mask that determines which of the pixels in the input data will be decoded
-            decode_mask = np.zeros((num_frames,) + self.img_dim_hw, dtype='bool')
-            decode_mask[:, decode_pixel_h_inds, decode_pixel_w_inds] = True
-            decode_inds = all_inds[:, decode_mask].T # /in num_p x 3
-        
+                decode_mask = np.zeros((num_frames,) + self.img_dim_hw, dtype='bool')
+                decode_mask[:, decode_pixel_h_inds, decode_pixel_w_inds] = True
+                return decode_mask
+            
+            in_object_decode_mask = create_pixel_mask_uniform(2)
+            in_object_decode_inds = all_inds[:, in_object_decode_mask].T
+     
             teacher_masks = ground_truth_masks
-            teacher_mask_boolean = teacher_masks == obj_id #true if pixel is obj_id, false otherwise
-            object_inds = all_inds[:, teacher_mask_boolean].T
-            # decode_inds = all_inds[:, decode_mask].T
+            teacher_masks_boolean = teacher_masks == obj_id #true if pixel is obj_id, false otherwise (need to conver to boolean type)
+            object_inds = all_inds[:, teacher_masks_boolean].T
 
             # creates set of tuples where each tuple is an index inside an object 
             obj_set = set(map(tuple, object_inds))
 
             # array where value at index i is 1 if row i in decode_inds is in object, 0 otherwise
+
+            test_matrix = np.where(in_object_decode_mask.astype(int) + teacher_masks_boolean.astype(int) >= 2.0, 1, 0)
+
+            query_decode_mask = create_pixel_mask_uniform(self.decode_pixel_downsample_factor)
+            decode_mask = query_decode_mask
+            decode_inds = all_inds[:, decode_mask].T # /in num_p x 3
+
             boolean_column = np.array([tuple(row) in obj_set for row in decode_inds])
 
             # mask plotting
-            # plt.title('Matrix Visualization')
+            plt.title('Matrix Visualization')
             # import pdb; pdb.set_trace()
-            # for i in range(8):
-            #     plt.imsave(f'plots/decode_mask_{i}.png', decode_mask[i])
-            #     plt.imsave(f'plots/teacher_mask_{i}.png', teacher_masks[i])
-            #     plt.imsave(f'plots/img_seq_{i}.png', item['img_seq'][i])
+            for i in range(8):
+                plt.imsave(f'plots/decode_mask_{i}.png', decode_mask[i])
+                plt.imsave(f'plots/test_matrix_{i}.png', test_matrix[i])
+                plt.imsave(f'plots/teacher_mask_{i}.png', teacher_masks[i])
+                plt.imsave(f'plots/img_seq_{i}.png', item['img_seq'][i])
 
         img_seq = item['img_seq']
         viewpoint_seq = item['viewpoint_seq']
@@ -164,7 +163,6 @@ class SOCSDataset(Dataset):
                     base_patch_embeddings[i,j,k] = np.array([time_offset, patch_y_offset, patch_x_offset, *view_offset])
 
         patch_positional_embeddings = fourier_embeddings(base_patch_embeddings, self.num_fourier_bands, self.fourier_sampling_rate)
-        # import pdb; pdb.set_trace()
         data = dict(
             img_seq = img_seq.astype('float32'),
             decode_dims = np.array([num_frames, 
@@ -354,7 +352,7 @@ if __name__ == '__main__':
                                                 decode_pixel_downsample_factor=args.downsample_factor,
                                                 camera_choice=args.cameras,
                                                 no_viewpoint=args.no_viewpoint), 
-                                    batch_size=batch_size, shuffle=True, num_workers=32)
+                                    batch_size=batch_size, shuffle=True, num_workers=64)
 
     model = SOCS(img_dim_hw=img_dim_hw,
                  embed_dim=args.object_latent_size,

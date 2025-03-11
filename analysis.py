@@ -118,15 +118,15 @@ if __name__ == '__main__':
     parser.add_argument('--num_seq_to_plot', type=int, default=1)
     parser.add_argument('--num_train_seq', type=int, default=40000)
     parser.add_argument('--num_val_seq', type=int, default=208)
-    parser.add_argument('--video_format', default='gif', choices=['gif', 'mp4', 'both'])
+    parser.add_argument('--video_format', default='both', choices=['gif', 'mp4', 'both'])
     parser.add_argument('--gpu', type=int, default=None, nargs='+')
     parser.add_argument('--parallel_pix', type=int, default=10000,
         help='Number of pixels to decode in each pass. More takes more memory but requires less passes as a result.')
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--plot_types', 
-                        default=['ground_truth_rgb', 'mixture_pred_rgb', 'pred_seg_foreground'], 
+                        default=['ground_truth_rgb', 'mixture_pred_rgb', 'pred_seg'], 
                         nargs='+', choices=PLOT_CHOICES.keys())
-    
+
     args = parser.parse_args()
 
     if args.log_root.endswith('.ckpt'):
@@ -174,7 +174,7 @@ if __name__ == '__main__':
         data_root = ckpt.hparams['dataset_root']
     else:
         data_root = args.data_root
-    
+
     img_dim_hw = ckpt.hparams['img_dim_hw']
 
     if 'cameras' in ckpt.hparams and ckpt.hparams['cameras'] is not None:
@@ -194,7 +194,7 @@ if __name__ == '__main__':
                          'instance_reconstruction_err', 
                          'ari',
                          'seq_ari']
-    
+
     def run_analysis(split, num_seq, indices, data_root):
         add_instance_seg = True if split == 'val' else False
         dataset = InferenceDataset(ckpt.hparams['sequence_len'],
@@ -218,7 +218,6 @@ if __name__ == '__main__':
         all_plots = []
         for (i, batch_results) in tqdm(enumerate(r)):
             batch = dataset.__getitem__(i)
-            # import pdb; pdb.set_trace()
             plots = plot_frame_sequence_from_single_batch(ckpt, batch, batch_results, plot_types)
             for key in result_categories:
                 if key in batch_results:
@@ -236,9 +235,9 @@ if __name__ == '__main__':
                     imageio.mimwrite(os.path.join(log_dir, f'{split}_{index}_{train_step}.gif'), frames, fps=2)
                 if args.video_format == 'both' or args.video_format == 'mp4':
                     imageio.mimwrite(os.path.join(log_dir, f'{split}_{index}_{train_step}.mp4'), frames, fps=2)
-    
+
         return results
-    
+
     overall_results = {'train_step': train_step}
     if do_train:
         results = run_analysis('train', args.num_train_seq, train_indices, train_data_root)
@@ -248,7 +247,7 @@ if __name__ == '__main__':
         results = run_analysis('val', args.num_val_seq, val_indices, val_data_root)
         overall_results['val_metrics'] = results
         overall_results['val_seq_indices'] = val_indices
-        
+
     if args.name is not None:
         name = f'_{args.name}'
     else:
